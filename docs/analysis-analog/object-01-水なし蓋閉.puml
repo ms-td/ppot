@@ -1,0 +1,188 @@
+@startuml
+title 話題沸騰ポット オブジェクト図 (水無し, 蓋閉じてる, 通電)
+
+<style>
+shadowing: false
+monochrome: true
+fontcolor: automatic
+BackgroundColor: transparent
+</style>
+
+skinparam backgroundColor transparent
+skinparam ObjectBorderColor #808080
+skinparam ObjectFontColor automatic
+skinparam ArrowColor #808080
+skinparam linetype ortho
+
+'#lightcyan センサ, ボタン
+'#lightgray 表示
+'#lightcyan 駆動物
+
+rectangle "-" as water {
+object "水位" as sl
+
+object "第1,2,3,4:第n水位センサ" as s1 #lightcyan {
+    本当は4つ実体がある
+    ===
+    番号 = 1
+    検出値 = off [pot-110-13]
+    ----
+    番号 = 2
+    検出値 = off [pot-110-13]
+    ----
+    番号 = 3
+    検出値 = off [pot-110-13]
+    ----
+    番号 = 4
+    検出値 = off [pot-110-13]
+}
+object "満水センサ" as s5 #lightcyan {
+    検出値 = off [pot-110-11]
+}
+object "第1,2,3,4:インジケータセル" as c1 #lightgray {
+    本当は4つ実体がある
+    ===
+    番号 = 1 (対応第1水位センサ)
+    表示 = 空 [pot-280-41]
+    ---
+    番号 = 2 (対応第2水位センサ)
+    表示 = 空 [pot-280-41]
+    ----
+    番号 = 3 (対応第3水位センサ)
+    表示 = 空 [pot-280-41]
+    ----
+    番号 = 4 (対応第4水位センサ)
+    表示 = 空 [pot-280-41]
+}
+}
+
+rectangle "-" as cover {
+object "蓋" as vm {
+    開閉 = 閉じてる
+}
+object "蓋センサ" as s6 #lightcyan {
+    検出値 = on [pot-110-15, 仮定]
+}
+}
+
+rectangle "-" as output {
+object "給湯口" as op {
+}
+object "解除ボタン:ボタン" as b2 #lightcyan {
+    押下 = 開放 [仮定]
+}
+object "ロック" as lk #lightpink {
+    駆動中 = 解除  [pot-250-11]
+}
+object "ポンプ" as pp #lightpink {
+    駆動中 = off
+}
+object "ロックランプ:ランプ" as ll #lightgray {
+    表示 = 消灯 [pot-250-11]
+}
+}
+
+rectangle "-" as heat {
+object "温度制御" as tm {
+    保温モード = 高温モード [pot-240-11]
+    制御方式* = なし
+    操作量M = 0%
+}
+object "ヒータ" as ht #lightpink {
+    駆動中 = off
+}
+object "ヒータ用電源" as hp #lightpink {
+    駆動中 = 給電中 [pot-110-18]
+}
+object "温度表示" as ts #lightgray {
+    表示 = なし [pot-330-42]
+}
+object "モード表示" as ms #lightgray {
+    表示 = 高温 [pot-240-41]
+}
+object "サーミスタ" as ss #lightcyan {
+    検出値 = 室温 [仮定]
+}
+object "保温設定ボタン:ボタン" as b5 #lightcyan {
+    押下 = 開放 [仮定]
+}
+}
+
+rectangle "-" as main {
+
+object "ポット" as wm {
+    検知しているエラー = なし [仮定]
+}
+object "アイドル:ポット状態" as idle {
+    状態名称 = アイドル [6.1]
+    ガード = 蓋on, 満水off, 第n水位on
+    待機イベント = 沸騰要求 [6.2]
+    次状態 = 加熱中(沸騰行為) [6.1, 6.3]
+}
+object "保温ランプ:ランプ" as kl #lightgray {
+    表示 = 消灯 [pot-330-41]
+}
+object "沸騰ランプ:ランプ" as bl #lightgray {
+    表示 = 消灯 [pot-330-41]
+}
+object "給湯ボタン:ボタン" as b1 #lightcyan {
+    押下 = 開放 [仮定]
+}
+object "沸騰ボタン:ボタン" as b3 #lightcyan {
+    押下 = 開放 [仮定]
+}
+object "ブザー" as bz #lightpink {
+    駆動中 = off
+}
+
+
+}
+' ----- 水 -----
+sl -- s1
+sl -- s1
+sl -- s1
+sl -- s1
+sl -- s5
+
+sl -- c1
+sl -- c1
+sl -- c1
+sl -- c1
+
+' ----- 蓋・ロック -----
+vm -- s6
+ll -- op
+op -- pp
+op -- lk
+op -- b2
+
+' ----- 温度制御 -----
+tm -- ht
+tm -- hp
+tm -- ss
+tm -- ms
+tm -- b5
+tm -- ts
+
+' ----- ポット本体 -----
+wm -- b1
+wm -- b3
+wm -- kl
+wm -- bl
+wm -- idle
+wm -- bz
+ht ..> hp
+
+' ----- 相互 ----
+sl .. wm
+wm .. op
+wm .. tm
+vm .. wm
+vm .. op
+
+' ----- 配置 -----
+water --d[hidden]-- main
+water --r[hidden]-- output
+heat --u[hidden]-- main
+
+@enduml
