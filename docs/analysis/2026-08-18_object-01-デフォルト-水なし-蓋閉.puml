@@ -1,0 +1,279 @@
+@startuml object-01-デフォルト-水なし-蓋閉
+' ============================================================================
+' 分析モデル / オブジェクト図 01
+' シーン: コンセント接続済 + デフォルト値 + 水なし + 蓋閉
+' 出典  : docs/spec/要求仕様.txt (sheet4)
+'         docs/spec/ハードウエア構成とハードウエア要求仕様.txt (sheet3)
+'         docs/spec/images/image12.png (内部構成図), image13.png (操作パネル部)
+' 表記  : docs/analysis/README.md の「表記規約」を参照
+'
+' package = 機能 (sheet4 の要求グループ), 色 = オブジェクトの種別。
+' 複数の機能から使われるオブジェクトは「その値を決める機能」が持ち,
+' 読むだけの機能は破線で参照する。
+' ============================================================================
+
+skinparam defaultFontName "Noto Sans CJK JP"
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam objectBorderColor #444444
+skinparam ArrowColor #555555
+skinparam packageBackgroundColor #FCFCFC
+skinparam nodesep 12
+skinparam ranksep 22
+
+title オブジェクト図 01 : デフォルト・水なし・蓋閉\n(コンセント接続直後 → 蓋を閉めてもアイドルのまま)
+
+' ================================================= 1. ポット全体
+package "1. ポット全体と電源 (pot-210, pot-100-12, pot-100-15, pot-110-22)" {
+  object "ポット : ポット" as pot #D6E4FF {
+    温度制御行為 = アイドル 【pot-210-11】【pot-330-11】
+  }
+  object "貯水部 : 貯水部" as tank {
+    水量 = なし 【シーン仮定】
+    取り付け部品 = 満水センサ, 第1〜第4水位センサ, 給水線,\n  サーミスタ, ヒータ 【pot-100-15】【image12.png】
+  }
+  object "操作パネル : 操作パネル" as panel {
+    取付先 = 蓋 【pot-100-12】
+    配置部品 = 沸騰/保温設定/給湯/解除の各ボタン,\n  沸騰/保温/ロックの各ランプ,\n  温度/モード表示窓, 水位メータ 【image13.png】
+  }
+  object "ブザー : ブザー" as buzzer #FFDFDF {
+    鳴動状態 = off 【シーン仮定: 鳴動要因なし】
+    鳴動周波数 = ○○KHz 【仕様未定義】
+  }
+  pot -[hidden]down- tank
+  tank -[hidden]down- panel
+  panel -[hidden]down- buzzer
+}
+
+' ================================================= 2. 蓋の開閉
+package "2. 蓋の開閉 (pot-220, pot-221, pot-100-11, pot-110-15)" {
+  object "蓋 : 蓋" as lid {
+    開閉 = 閉 【シーン仮定】
+  }
+  object "蓋センサ : 蓋センサ" as lidSensor #FFF0DB {
+    検出値 = on 【シーン仮定: 蓋閉】
+    on継続時間 = 3sec 以上 → 蓋が閉じられたと判断 【pot-220-11】
+  }
+  lid -[hidden]down- lidSensor
+}
+
+' ================================================= 3. 水位の判定と表示
+package "3. 水位の判定と表示 (pot-280, pot-110-11/-13/-19, pot-120-11)\nセンサは貯水部への取り付け位置 (上から下) の順" {
+  object "満水センサ : 満水センサ" as fullSensor #FFF0DB {
+    検出値 = off 【シーン仮定: 水なし】
+    デフォルト値 = on 【pot-110-12: 故障時は安全側】
+  }
+  object "給水線 : 給水線" as fillLine {
+    位置 = 満水センサより若干下 【pot-110-19】
+  }
+  object "第4水位センサ : 第n水位センサ" as lv4 #FFF0DB {
+    番号 = 4 / 検出値 = off 【シーン仮定: 水なし】
+    デフォルト値 = off 【pot-110-14: 故障時は安全側】
+  }
+  object "第3水位センサ : 第n水位センサ" as lv3 #FFF0DB {
+    番号 = 3 / 検出値 = off 【シーン仮定: 水なし】
+    デフォルト値 = off 【pot-110-14】
+  }
+  object "第2水位センサ : 第n水位センサ" as lv2 #FFF0DB {
+    番号 = 2 / 検出値 = off 【シーン仮定: 水なし】
+    デフォルト値 = off 【pot-110-14】
+  }
+  object "第1水位センサ : 第n水位センサ" as lv1 #FFF0DB {
+    番号 = 1 / 検出値 = off 【シーン仮定: 水なし】
+    デフォルト値 = off 【pot-110-14】
+  }
+  object "水位判定 : 水位判定" as levelJudge #D6E4FF {
+    水量区分 = <b>空</b> 【pot-280-12: 全水位センサ off】
+    on検出センサ数 = 0 / 4
+    判定時点 = 蓋センサ on から 3sec 経過時 【pot-280-11】【pot-280-12】
+  }
+  object "水位メータ : 水位メータ" as levelMeter #E2F3E2 {
+    セル数 = 4 (水位センサと同数) 【pot-120-11】
+    表示パターン = 空点滅\n  (500msec消灯 / 200msec点灯 の繰り返し) 【pot-280-41】
+  }
+  object "インジケータセル4 : インジケータセル" as cell4 #E2F3E2 {
+    番号 = 4 / 対応 = 第4水位センサ
+    点灯状態 = 点滅中 (空パターン) 【pot-280-41】
+  }
+  object "インジケータセル3 : インジケータセル" as cell3 #E2F3E2 {
+    番号 = 3 / 対応 = 第3水位センサ
+    点灯状態 = 点滅中 (空パターン) 【pot-280-41】
+  }
+  object "インジケータセル2 : インジケータセル" as cell2 #E2F3E2 {
+    番号 = 2 / 対応 = 第2水位センサ
+    点灯状態 = 点滅中 (空パターン) 【pot-280-41】
+  }
+  object "インジケータセル1 : インジケータセル" as cell1 #E2F3E2 {
+    番号 = 1 / 対応 = 第1水位センサ
+    点灯状態 = 点滅中 (空パターン) 【pot-280-41】
+  }
+  fullSensor -[hidden]down- fillLine
+  fillLine -[hidden]down- lv4
+  lv4 -[hidden]down- lv3
+  lv3 -[hidden]down- lv2
+  lv2 -[hidden]down- lv1
+  levelJudge -[hidden]down- levelMeter
+}
+
+' ================================================= 4. 温度制御
+package "4. 温度制御 (pot-230, pot-240, pot-310〜330, pot-400, pot-110-16/-17)" {
+  object "サーミスタ : サーミスタ" as thermistor #FFF0DB {
+    検出水温 = 20°C 【シーン仮定: 室温】
+    測定範囲 = -10°C 〜 150°C 【pot-110-16】
+  }
+  object "ヒータ : ヒータ" as heater #FFDFDF {
+    動作状態 = off 【pot-330-21: 操作量 0%】
+  }
+  object "アイドル : アイドル" as action #D6E4FF {
+    制御方式 = なし (温度制御しない) 【pot-330】
+    操作量M = 0% 【pot-330-21】
+    制御周期 = 【仕様未定義】
+  }
+  object "保温モード設定 : 保温モード設定" as modeSetting #D6E4FF {
+    保温モード = 高温モード 【pot-240-11: デフォルト】
+    目標温度 = 98°C 【pot-240-31】
+    適用状態 = 未適用 (アイドル中) 【pot-330】
+  }
+  object "沸騰ボタン : 沸騰ボタン" as boilBtn #E2F3E2 {
+    押下状態 = 非押下 【シーン仮定】
+    有効性 = 無効 【pot-230-11: 保温行為中でない】
+  }
+  object "保温設定ボタン : 保温設定ボタン" as modeBtn #E2F3E2 {
+    押下状態 = 非押下 【シーン仮定】
+    有効性 = 有効 【pot-240-21: 蓋センサ on】
+  }
+  object "沸騰ランプ : 沸騰ランプ" as boilLamp #E2F3E2 {
+    点灯状態 = 消灯 【pot-330-41】
+  }
+  object "保温ランプ : 保温ランプ" as keepLamp #E2F3E2 {
+    点灯状態 = 消灯 【pot-330-41】
+  }
+  object "温度/モード表示窓 : 温度/モード表示窓" as display #E2F3E2 {
+    温度表示 = 非表示 【pot-330-42: アイドル中は数値を表示しない】
+    モード表示 = 一番左を▼ (高温) 【pot-240-41】
+  }
+  thermistor -[hidden]down- heater
+  action -[hidden]down- modeSetting
+  boilBtn -[hidden]down- modeBtn
+  boilLamp -[hidden]down- keepLamp
+  keepLamp -[hidden]down- display
+}
+
+' ================================================= 5. ロックと給湯
+package "5. ロックと給湯 (pot-250, pot-260, pot-100-13, pot-110-20)" {
+  object "給湯口 : 給湯口" as spout {
+    ロック = 解除 【pot-250-11】
+  }
+  object "ポンプ : ポンプ" as pump #FFDFDF {
+    動作状態 = 停止 【pot-260-11: 給湯条件を満たさない】
+  }
+  object "ロック状態 : ロック状態" as lockCtrl #D6E4FF {
+    ロック状態 = 解除 【pot-250-11: デフォルト】
+  }
+  object "給湯状態 : 給湯状態" as dispenseCtrl #D6E4FF {
+    給湯中 = 偽 【pot-260-11】
+  }
+  object "解除ボタン : 解除ボタン" as unlockBtn #E2F3E2 {
+    押下状態 = 非押下 【シーン仮定】
+    有効性 = 有効 【pot-250-21: 給湯中でない かつ 蓋センサ on】
+  }
+  object "給湯ボタン : 給湯ボタン" as dispenseBtn #E2F3E2 {
+    押下状態 = 非押下 【シーン仮定】
+    給湯可否 = 不可 【pot-260-11: 水量が適正でない,\n  保温行為中でない】
+  }
+  object "ロックランプ : ロックランプ" as lockLamp #E2F3E2 {
+    点灯状態 = 消灯 【pot-250-11: ロック解除】
+  }
+  spout -[hidden]down- pump
+  lockCtrl -[hidden]down- dispenseCtrl
+  unlockBtn -[hidden]down- dispenseBtn
+  dispenseBtn -[hidden]down- lockLamp
+}
+
+' ================================================= 6. エラーの検出と処置
+package "6. エラーの検出と処置 (pot-500, pot-110-18)" {
+  object "ヒータ用電源 : ヒータ用電源" as heaterPower #FFDFDF {
+    供給状態 = on (通電中) 【pot-110-18: コンセント接続中】
+  }
+  object "エラー検出 : エラー検出" as errDetect #D6E4FF {
+    エラー状態 = なし 【pot-500 説明: 再接続でリセット】
+    エラー種別 = ―
+    検出周期 = 1分 【pot-500-31】
+    前回検出水温 = 未取得 【シーン仮定】【pot-500-31: 前回検出水温を用いる】
+    高温しきい値 = 110°C を超えた場合 【pot-500-11】
+    温度上がらず判定 = 適用外 (ヒータ制御中でない) 【pot-500-31】
+    98°C超過継続時間 = 適用外 (保温行為中でない) 【pot-500-21】
+  }
+  heaterPower -[hidden]down- errDetect
+}
+
+' ============================================ 関連 (構造)
+pot -- lid
+pot -- panel
+pot -- tank
+pot -- spout
+pot -- action : 実行中の温度制御行為
+lid -- lidSensor : 開閉を検出
+heaterPower -- heater : 電力を供給
+spout -- pump : 給湯口へ排出
+levelMeter -- cell4 : 上から順に 4 個 【pot-120-11】
+cell4 -- cell3
+cell3 -- cell2
+cell2 -- cell1
+
+' ============================================ 関連 (機能内の参照 / 指示)
+levelJudge ..> fullSensor : 満水を判定 【pot-280-11】
+levelJudge ..> lv1 : on の水位センサを判定 (第1〜第4) 【pot-280-12】
+levelJudge ..> levelMeter : 表示パターンを指示 【pot-280-21】【pot-280-41】
+action ..> thermistor : 水温を取得
+action ..> heater : 操作量で on/off 【pot-400-11】
+action ..> boilLamp : 消灯を指示 【pot-330-41】
+action ..> display : 温度を非表示 【pot-330-42】
+boilBtn ..> action : 押下で沸騰行為へ 【pot-230-11】
+modeBtn ..> modeSetting : 押下でモードを切替 【pot-240-21】
+modeSetting ..> display : ▼位置を指示 【pot-240-41】
+unlockBtn ..> lockCtrl : 押下でロック / 解除 【pot-250-21】
+lockCtrl ..> lockLamp : 点灯 / 消灯を指示 【pot-250-21】
+lockCtrl ..> spout : ロック対象 【pot-250】
+dispenseBtn ..> dispenseCtrl : 押下中は給湯 【pot-260-11】
+dispenseCtrl ..> pump : 作動 / 停止を指示 【pot-260-11】
+errDetect ..> heaterPower : 異常時 off 【pot-500-11】【pot-500-21】【pot-500-31】
+errDetect ..> buzzer : 異常時 30秒鳴動 【pot-500-11】【pot-500-21】【pot-500-31】
+
+' ============================================ 関連 (機能をまたぐ条件参照)
+levelJudge ..> lidSensor : 蓋センサ on から 3sec 後に判定 【pot-280-11】【pot-280-12】
+action ..> lidSensor : 蓋センサ on で沸騰行為へ 【pot-330-51】
+action ..> levelJudge : 水量が適正なら沸騰行為へ 【pot-220-21】【pot-220-31】
+modeSetting ..> lidSensor : 蓋センサ on が切替の条件 【pot-240-21】
+lockCtrl ..> lidSensor : 蓋センサ on が操作の条件 【pot-250-21】【pot-250-31】
+dispenseCtrl ..> lockCtrl : ロック解除が給湯の条件 【pot-260-11】
+dispenseCtrl ..> action : 保温行為中が給湯の条件 【pot-260-11】
+dispenseCtrl ..> levelJudge : 水量適正が給湯の条件 【pot-260-11】
+errDetect ..> thermistor : 1分周期で水温を検出 【pot-500-31】
+
+legend bottom left
+  <b>■ このシーンの要点</b>
+  コンセントを差すと設定値にデフォルト値がセットされ, アイドルになる【pot-210-11】【pot-330-11】。
+  蓋センサ on から 3sec 経過した時点で全水位センサ off を検出 →「空」と判定【pot-280-12】。
+  水量が異常なので, 蓋が閉じられても状態はアイドルのまま【pot-220-31】。
+  → 温度制御はせず操作量は 0%【pot-330-21】, 沸騰/保温ランプはともに消灯【pot-330-41】,
+     温度は非表示【pot-330-42】, 水位メータは空点滅【pot-280-41】。
+
+  <b>■ 図の読み方</b>
+  <b>package = 機能</b>。sheet4 の要求グループに対応する。複数の機能から使われるオブジェクトは
+  「その値を決める機能」が持ち, 読むだけの機能は破線で参照する
+  (例: 蓋センサは 2.蓋の開閉 が持ち, 3/4/5 が条件として参照する)。
+  <b>色 = 種別</b>。<back:#FFF0DB>センサ</back> / <back:#FFDFDF>アクチュエータ</back> / <back:#E2F3E2>操作パネルの部品</back> / <back:#D6E4FF>状態・判定</back> / 白 = 外観の構造物
+
+  <b>■ 凡例</b>
+  <b>【pot-xxx】</b>   要求仕様で値が決まっている      <b>実線 ―</b>  構造的な関連 (所有 / 取り付け)
+  <b>【シーン仮定】</b> このシーンのために置いた値      <b>破線 ..></b> 参照 / 指示 / 条件
+  <b>【仕様未定義】</b> 仕様書に記述がない
+
+  <b>■ モデル化の対象外</b>
+  ・キッチンタイマ (タイマボタン, タイマ残り時間表示窓) … sheet3 の操作パネル表にのみ存在し, sheet4 に pot-NNN 要求がない (pot-270 が欠番)
+  ・取手 pot-100-14, 水路 pot-110-21 … 制御に関与しない受動部品
+  ・ブザーの鳴動元のうち pot-230-11 (沸騰ボタン 100msec) と pot-240-21 (保温設定ボタン 100msec) は<b>未反映</b>
+endlegend
+
+@enduml
