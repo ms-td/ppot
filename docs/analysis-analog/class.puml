@@ -1,0 +1,144 @@
+@startuml
+title 話題沸騰ポット クラス図 (検査用)
+
+<style>
+shadowing: false
+monochrome: true
+fontcolor: automatic
+</style>
+
+skinparam ObjectBorderColor #808080
+skinparam ObjectFontColor automatic
+skinparam ArrowColor #808080
+skinparam linetype ortho
+
+class "ランプ" as lamp #lightgray {
+    点灯状態
+}
+class "ボタン" as button #lightcyan {
+    押下状態
+    有効性
+}
+class "インジケータセル" as cell #lightgray {
+    番号
+    表示
+}
+
+rectangle "-" as water {
+class "水位" as level {
+    位置
+    満水
+    空
+}
+
+class "第n水位センサ" as wSenser #lightcyan {
+    番号
+    検出値
+}
+class "満水センサ" as wwSenser #lightcyan {
+    検出値
+}
+level  --  wwSenser
+level "1" *-- "4" wSenser
+level "1" *-- "4" cell
+}
+
+rectangle "-" as cover {
+class "蓋" as coverTop {
+    閉
+}
+class "蓋センサ" as coverSenser #lightcyan {
+    検出値
+}
+
+coverTop  --  coverSenser
+
+}
+
+rectangle "-" as output {
+class "給湯口" as operation {
+    ロック
+    給湯中
+}
+class "ポンプ" as pomp #lightpink {
+    駆動中
+}
+
+operation  --  pomp
+operation  --  button
+operation  --  lamp
+
+}
+
+class "温度表示" as tempView #lightgray {
+    表示
+}
+
+rectangle "-" as heat {
+class "温度制御" as tempCntl {
+    制御中
+    目標温度
+    水温
+    制御方式*
+    操作量M
+}
+class "ヒータ" as heater #lightpink {
+    駆動中
+}
+class "ヒータ用電源" as power #lightpink {
+    駆動中
+}
+class "サーミスタ" as sermister #lightcyan {
+    検出値
+}
+
+tempCntl  --  heater
+tempCntl  --  power
+tempCntl  --  tempView
+tempCntl  --  sermister
+
+}
+
+class "モード表示" as modeView #lightgray {
+    表示
+}
+
+rectangle "-" as main {
+
+class "ポット" as body {
+    検知しているエラー
+    保温モード
+    ポット状態*
+}
+class "ブザー" as buzzer #lightpink {
+    駆動中
+}
+
+class "ポット状態" as potState {
+    状態名称
+    待機イベント
+    ガード
+}
+
+body  --  modeView
+body  --  buzzer
+body "1" -- "3" button
+body "1" -- "2" lamp
+body  *-- potState
+potState "0..*" o-- "0..*" potState
+hide potState
+}
+
+' ----- 相互 ----
+level  ..  body
+body  ..  operation
+body  ..  tempCntl
+coverTop  ..  body
+coverTop  ..  operation
+
+' ----- 配置 -----
+
+legend bottom left
+    1対1の多重度表記は数値を省略
+endlegend
+@enduml
