@@ -91,11 +91,17 @@ class "ヒータ用電源" as power #lightpink {
 class "サーミスタ" as sermister #lightcyan {
     検出値
 }
+abstract class "制御方式" as method {
+    ----
+    +操作量導出()
+}
 
 tempCntl  --  heater
 tempCntl  --  power
 tempCntl  --  tempView
 tempCntl  --  sermister
+tempCntl "1" -- "0..1" method
+remove method
 
 }
 
@@ -126,7 +132,7 @@ body "1" -- "3" button
 body "1" -- "2" lamp
 body  *-- potState
 potState "0..*" o-- "0..*" potState
-hide potState
+remove potState
 }
 
 ' ----- 相互 ----
