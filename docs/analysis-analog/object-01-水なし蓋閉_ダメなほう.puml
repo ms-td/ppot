@@ -1,4 +1,4 @@
-@startuml
+﻿@startuml
 title 話題沸騰ポット オブジェクト図 (水無し, 蓋閉じてる, 通電)
 
 <style>
@@ -15,13 +15,6 @@ skinparam linetype ortho
 '#lightcyan センサ, ボタン
 '#lightgray 表示
 '#lightpink 駆動物
-
-rectangle "-" as water {
-object "水位" as sl {
-    位置 = 0
-    満水 = false
-    空 = true
-}
 
 object "第1,2,3,4:第n水位センサ" as s1 #lightcyan {
     本当は4つ実体がある
@@ -56,21 +49,18 @@ object "第1,2,3,4:インジケータセル" as c1 #lightgray {
     番号 = 4 (対応第4水位センサ)
     表示 = 空パターン [pot-280-41]
 }
+object "水位メータ" as lm #lightgray {
+    表示対象 = ポット内の水量 [pot-280]
+    構成 = 水位センサと同数のインジケータセル [pot-120-11]
 }
 
-rectangle "-" as cover {
-object "蓋" as vm {
-    閉 = true
-}
 object "蓋センサ" as s6 #lightcyan {
     検出値 = on [pot-110-15, 仮定]
 }
 note as delay
     蓋センサ off: 1s, on: 3s [pot-220-11, pot-221-11]
 end note
-}
 
-rectangle "-" as output {
 object "給湯口" as op {
     ロック = 解除 [pot-250-11]
     給湯中 = false
@@ -85,46 +75,26 @@ object "ポンプ" as pp #lightpink {
 object "ロックランプ:ランプ" as ll #lightgray {
     表示 = 消灯 [pot-250-11]
 }
-}
 
-rectangle "-" as heat {
-object "温度制御" as tm {
-    制御中 = false
-    目標温度 = 100 [pot-310]
-    水温 = 室温
-    制御方式* = なし
-    操作量M = 0%
-}
 object "ヒータ" as ht #lightpink {
     駆動中 = 0%
 }
 object "ヒータ用電源" as hp #lightpink {
     駆動中 = 給電中 [pot-110-18]
 }
-object "温度表示" as ts #lightgray {
-    表示 = なし [pot-330-42]
+object "コンセント" as ac {
+    接続 = 差し込み中 [pot-210]
+}
+object "温度/モード表示窓" as ts #lightgray {
+    温度表示 = なし [pot-330-42]
+    モード表示 = 高温 [pot-240-41]
 }
 object "サーミスタ" as ss #lightcyan {
     検出値 = 室温 [仮定]
 }
-}
-
-rectangle "-" as main {
 
 object "ポット" as wm {
     検知しているエラー = なし
-    ポット状態* = アイドル
-    保温モード = 高温モード [pot-240-11]
-}
-note as idle
-    アイドル [6.1]:ポット状態
-
-    待機イベント => 沸騰要求 [6.2]
-    次状態 => 加熱中(沸騰行為) [6.1, 6.3]
-    ガード => 蓋.閉 ∩ !水位.満水 ∩ !水位.空
-end note
-object "モード表示" as ms #lightgray {
-    表示 = 高温 [pot-240-41]
 }
 object "保温設定ボタン:ボタン" as b5 #lightcyan {
     押下 = 開放 [仮定]
@@ -147,52 +117,53 @@ object "沸騰ボタン:ボタン" as b3 #lightcyan {
 object "ブザー" as bz #lightpink {
     駆動中 = off
 }
-}
 
-' ----- 水 -----
-sl -- s1
-sl -- s1
-sl -- s1
-sl -- s1
-sl -- s5
+s1 -- lm
+s1 -- c1
+s1 -- c1
+s1 -- c1
+s1 -- c1
+s5 -- c1
+s5 -- lm
+lm -- c1
+s6 -- s5
+s6 -- s1
+s6 -- wm
+s6 -- c1
 
-sl -- c1
-sl -- c1
-sl -- c1
-sl -- c1
+s6 -- op
+s6 -- ll
 
-' ----- 蓋・ロック -----
-vm -- s6
-ll -- op
-op -- pp
-op -- b2
-
-' ----- 温度制御 -----
-tm -- ht
-tm -- hp
-tm -- ss
-tm -- ts
-ht <.. hp : 電力の供給
-
-' ----- ポット本体 -----
-wm -- b1
 wm -- b3
+bz -- b3
+
+b5 -- s6
+b5 -- ts
+b5 -- bz
+
+op -- b2
+b2 -- ll
+
+b1 -- pp
+pp -- s6
+pp -- op
+pp -- s6
+pp -- s1
+pp -- ss
+pp -- hp
+pp -- ts
+
 wm -- kl
 wm -- bl
-wm -- ms
-wm -- b5
-wm -- bz
-
-' ----- 相互 ----
-sl -- wm
-wm -- op
-wm -- tm
-vm -- wm
-vm -- op
-
-' ----- 配置 -----
-water --d[hidden]-- main
-water --r[hidden]-- output
-heat --u[hidden]-- main
+wm -- ht
+wm -- s6
+ss -- ht
+ss -- ts
+ss -- wm
+ac -- wm
+ac -- hp
+ht -- bz
+ht <.. hp : 電力の供給
 
 @enduml
+

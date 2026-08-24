@@ -90,7 +90,7 @@ object "ロックランプ:ランプ" as ll #lightgray {
 rectangle "-" as heat {
 object "温度制御" as tm {
     制御中 = true
-    目標温度 = 100 [pot-240-31]
+    目標温度 = 100 [pot-310]
     水温 = 常温
     制御方式* = 目標温度ON/OFF方式 [pot-310-21]
     操作量M = 100% [pot-400-21]
