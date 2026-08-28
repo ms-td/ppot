@@ -102,7 +102,7 @@ tempCntl  --  power
 tempCntl  --  tempView
 tempCntl  --  sermister
 tempCntl "1" -- "0..1" method
-remove method
+'remove method
 
 }
 
@@ -129,7 +129,7 @@ body "1" -- "3" button
 body "1" -- "2" lamp
 body  *-- potState
 potState "0..*" o-- "0..*" potState
-remove potState
+'remove potState
 }
 
 ' ----- 相互 ----

@@ -193,6 +193,6 @@ vm -- op
 ' ----- 配置 -----
 water --d[hidden]-- main
 water --r[hidden]-- output
-heat --u[hidden]-- main
+heat --d[hidden]-- main
 
 @enduml
