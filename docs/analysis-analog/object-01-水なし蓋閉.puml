@@ -23,7 +23,7 @@ object "水位" as sl {
     空 = true
 }
 
-object "第1,2,3,4:第n水位センサ" as s1 #lightcyan {
+object "第1,2,3,4:水位センサ" as s1 #lightcyan {
     本当は4つ実体がある
     ===
     番号 = 1
@@ -85,6 +85,10 @@ object "ポンプ" as pp #lightpink {
 object "ロックランプ:ランプ" as ll #lightgray {
     表示 = 消灯 [pot-250-11]
 }
+object "給湯ボタン:ボタン" as b1 #lightcyan {
+    押下 = 開放 [仮定]
+    有効性 = 無効 [pot-260-11]
+}
 }
 
 rectangle "-" as heat {
@@ -112,9 +116,7 @@ object "サーミスタ" as ss #lightcyan {
 rectangle "-" as main {
 
 object "ポット" as wm {
-    検知しているエラー = なし
     ポット状態* = アイドル
-    保温モード = 高温モード [pot-240-11]
 }
 note as idle
     アイドル [6.1]:ポット状態
@@ -123,30 +125,38 @@ note as idle
     次状態 => 加熱中(沸騰行為) [6.1, 6.3]
     ガード => 蓋.閉 ∩ !水位.満水 ∩ !水位.空
 end note
-object "モード表示" as ms #lightgray {
-    表示 = 高温 [pot-240-41]
-}
-object "保温設定ボタン:ボタン" as b5 #lightcyan {
-    押下 = 開放 [仮定]
-    有効性 = 許可 [pot-240-21]
-}
 object "保温ランプ:ランプ" as kl #lightgray {
     表示 = 消灯 [pot-330-41]
 }
 object "沸騰ランプ:ランプ" as bl #lightgray {
     表示 = 消灯 [pot-330-41]
 }
-object "給湯ボタン:ボタン" as b1 #lightcyan {
-    押下 = 開放 [仮定]
-    有効性 = 無効 [pot-260-11]
+}
+
+rectangle "-" as keeper {
+object "保温モード" as mm {
+    モード = 高温モード [pot-240-11]
+    保温温度 = 98 [pot-240-31]
+}
+object "モード表示" as ms #lightgray {
+    表示 = 高温 [pot-240-41]
 }
 object "沸騰ボタン:ボタン" as b3 #lightcyan {
     押下 = 開放 [仮定]
     有効性 = 無効 [pot-230-11]
 }
+object "保温設定ボタン:ボタン" as b5 #lightcyan {
+    押下 = 開放 [仮定]
+    有効性 = 許可 [pot-240-21]
+}
+}
+
+object "検出しているエラー" as error {
+    エラー = なし
+}
+
 object "ブザー" as bz #lightpink {
     駆動中 = off
-}
 }
 
 ' ----- 水 -----
@@ -166,6 +176,7 @@ vm -- s6
 ll -- op
 op -- pp
 op -- b2
+op -- b1
 
 ' ----- 温度制御 -----
 tm -- ht
@@ -174,21 +185,30 @@ tm -- ss
 tm -- ts
 ht <.. hp : 電力の供給
 
+' ----- モード -----
+mm -- b5
+mm -- ms
+mm -- vm
+mm -- b3
+
 ' ----- ポット本体 -----
-wm -- b1
-wm -- b3
 wm -- kl
 wm -- bl
-wm -- ms
-wm -- b5
 wm -- bz
 
 ' ----- 相互 ----
+sl -- vm
 sl -- wm
 wm -- op
 wm -- tm
 vm -- wm
 vm -- op
+wm -- mm
+tm -- error
+wm -- error
+bz -- error
+bz -- mm
+bz -- op
 
 ' ----- 配置 -----
 water --d[hidden]-- main

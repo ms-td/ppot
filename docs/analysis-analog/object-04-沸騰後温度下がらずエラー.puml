@@ -1,5 +1,5 @@
 @startuml
-title 話題沸騰ポット オブジェクト図 (給水線, 沸騰開始, 通電)
+title 話題沸騰ポット オブジェクト図 (沸騰後温度下がらず, ミルクモード, 通電)
 
 <style>
 shadowing: false
@@ -18,7 +18,7 @@ skinparam linetype ortho
 
 rectangle "-" as water {
 object "水位" as sl {
-    位置 = 4
+    位置 = 2
     満水 = false
     空 = false
 }
@@ -33,10 +33,10 @@ object "第1,2,3,4:水位センサ" as s1 #lightcyan {
     検出値 = on [pot-110-13]
     ----
     番号 = 3
-    検出値 = on [pot-110-13]
+    検出値 = off [pot-110-13]
     ----
     番号 = 4
-    検出値 = on [pot-110-13]
+    検出値 = off [pot-110-13]
 }
 object "満水センサ" as s5 #lightcyan {
     検出値 = off [pot-110-11]
@@ -51,10 +51,10 @@ object "第1,2,3,4:インジケータセル" as c1 #lightgray {
     表示 = 点灯 [pot-280-21]
     ----
     番号 = 3 (対応第3水位センサ)
-    表示 = 点灯 [pot-280-21]
+    表示 = 消灯 [pot-280-21]
     ----
     番号 = 4 (対応第4水位センサ)
-    表示 = 点灯 [pot-280-21]
+    表示 = 消灯 [pot-280-21]
 }
 }
 
@@ -93,61 +93,53 @@ object "給湯ボタン:ボタン" as b1 #lightcyan {
 
 rectangle "-" as heat {
 object "温度制御" as tm {
-    制御中 = true
-    目標温度 = 100 [pot-310]
-    水温 = 常温
-    制御方式* = 目標温度ON/OFF方式 [pot-310-21]
-    操作量M = 100% [pot-400-21]
+    制御中 = false
+    目標温度 = 60 [pot-310]
+    水温 = 99
+    制御方式* = なし
+    操作量M = 0%
 }
 object "ヒータ" as ht #lightpink {
-    駆動中 = 100%
+    駆動中 = 0%
 }
 object "ヒータ用電源" as hp #lightpink {
-    駆動中 = 給電中 [pot-110-18]
+    駆動中 = OFF [pot-500-21]
 }
 object "温度表示" as ts #lightgray {
-    表示 = 常温 [pot-310-12]
+    表示 = 99 [pot-310-12]
 }
 object "サーミスタ" as ss #lightcyan {
-    検出値 = 常温 [仮定]
+    検出値 = 99 [仮定]
 }
 }
 
 rectangle "-" as main {
 
 object "ポット" as wm {
-    ポット状態* = 加熱中(沸騰行為)
+    ポット状態* = エラー
 }
-note as boil
-    加熱中(沸騰行為):ポット状態 [6.1]
+note as idle
+    エラー [6.1]:ポット状態
 
-    待機イベント = 沸点到達 [6.2]
-    次状態 => カルキ抜キ中(沸騰行為) [6.1, 6.3]
-    ガード = なし
-
-    待機イベント => エラー検知 [6.2]
-    次状態 => エラー [6.1, 6.3]
+    待機イベント => なし
+    次状態 => なし
     ガード => なし
-
-    待機イベント => 温度制御停止 [6.2]
-    次状態 => アイドル [6.1, 6.3]
-    ガード => !蓋.閉 ∪ 水位.空
 end note
 object "保温ランプ:ランプ" as kl #lightgray {
-    表示 = 消灯 [pot-310-11]
+    表示 = 消灯 [pot-330-41]
 }
 object "沸騰ランプ:ランプ" as bl #lightgray {
-    表示 = 点灯 [pot-310-11]
+    表示 = 消灯 [pot-330-41]
 }
 }
 
 rectangle "-" as keeper {
 object "保温モード" as mm {
-    モード = 高温モード [pot-240-11]
-    保温温度 = 98 [pot-240-31]
+    モード = ミルクモード [pot-240-11, 仮定]
+    保温温度 = 60 [pot-240-31]
 }
 object "モード表示" as ms #lightgray {
-    表示 = 高温 [pot-240-41]
+    表示 = ミルク [pot-240-41]
 }
 object "沸騰ボタン:ボタン" as b3 #lightcyan {
     押下 = 開放 [仮定]
@@ -160,11 +152,11 @@ object "保温設定ボタン:ボタン" as b5 #lightcyan {
 }
 
 object "検出しているエラー" as error {
-    エラー = なし
+    エラー = 温度下がらずエラー
 }
 
 object "ブザー" as bz #lightpink {
-    駆動中 = off
+    駆動中 = 30秒のパターンで鳴動中
 }
 
 ' ----- 水 -----
@@ -193,7 +185,6 @@ tm -- ss
 tm -- ts
 ht <.. hp : 電力の供給
 
-
 ' ----- モード -----
 mm -- b5
 mm -- ms
@@ -203,7 +194,7 @@ mm -- b3
 ' ----- ポット本体 -----
 wm -- kl
 wm -- bl
-wm -- b5
+wm -- bz
 
 ' ----- 相互 ----
 sl -- vm

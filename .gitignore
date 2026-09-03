@@ -1,3 +1,5 @@
 .venv
 .claude
 *.png
+*.xmi
+*qeax.bak_*
