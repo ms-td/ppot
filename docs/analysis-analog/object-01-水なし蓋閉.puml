@@ -116,7 +116,7 @@ object "サーミスタ" as ss #lightcyan {
 rectangle "-" as main {
 
 object "ポット" as wm {
-    ポット状態* = アイドル
+    現在状態* = アイドル
 }
 note as idle
     アイドル [6.1]:ポット状態
@@ -151,8 +151,12 @@ object "保温設定ボタン:ボタン" as b5 #lightcyan {
 }
 }
 
-object "検出しているエラー" as error {
-    エラー = なし
+object "温度エラー監視" as error {
+    検知したエラー = なし
+    監視中 = false
+    監視対象行為 = なし
+    前回水温 = 室温
+    経過時間 = 0
 }
 
 object "ブザー" as bz #lightpink {
@@ -206,7 +210,6 @@ vm -- op
 wm -- mm
 tm -- error
 wm -- error
-bz -- error
 bz -- mm
 bz -- op
 

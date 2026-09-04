@@ -35,9 +35,9 @@ class "水位センサ" as wSenser #lightcyan {
 class "満水センサ" as wwSenser #lightcyan {
     - 検出値
 }
-level  --  wwSenser
-level "1" *-- "4" wSenser
-level "1" *-- "4" cell
+wwSenser  --  level
+wSenser "1..*" -- "1" level
+cell "1..*" -- "1" level
 
 class "蓋" as coverTop {
     - 閉
@@ -46,7 +46,7 @@ class "蓋センサ" as coverSenser #lightcyan {
     - 検出値
 }
 
-coverTop  --  coverSenser
+coverSenser  --  coverTop
 
 class "給湯口" as operation {
     - ロック
@@ -56,12 +56,14 @@ class "ポンプ" as pomp #lightpink {
     - 駆動中
 }
 
-operation  --  pomp
-operation  --  button
-operation  --  lamp
+pomp  --  operation
+button "1..*" -- "1" operation
+lamp  --  operation
 
-class "温度/モード表示窓" as tempView #lightgray {
-    - 温度表示
+class "温度表示" as tempView #lightgray {
+    - 表示
+}
+class "モード表示" as modeView #lightgray {
     - モード表示
 }
 
@@ -86,36 +88,46 @@ abstract class "制御方式" as method {
     +操作量導出()
 }
 
-tempCntl  --  heater
-tempCntl  --  power
-tempCntl  --  tempView
-tempCntl  --  sermister
+heater  --  tempCntl
+power  --  tempCntl
+sermister  --  tempCntl
+tempView  --  tempCntl
+power ..> heater
 tempCntl "1" -- "0..1" method
 remove method
 
 class "ポット" as body {
+    - 現在状態*
 }
 class "ポット状態" as potState {
+}
+class "状態遷移" as transition {
     - 待機イベント
     - ガード
 }
+note as states
+    ポットは全6つの状態を持ち,
+    うち1つを現在状態として指す
+end note
 
-body "1" -- "2" button
-body "1" -- "2" lamp
-body  *-- potState
-potState "0..*" o-- "0..*" potState
-'remove potState
+lamp "1..*" -- "1" body
+remove potState
+remove transition
 
 class "保温モード" as keepmode {
     - モード
     - 保温温度
 }
 
-keepmode -- tempView
-keepmode -- button
+modeView -- keepmode
+button "1..*" -- "1" keepmode
 
-class "検出しているエラー" as error {
-    - エラー
+class "温度エラー監視" as errorWatch {
+    - 検知したエラー
+    - 前回水温
+    - 監視中
+    - 監視対象行為
+    - 経過時間
 }
 
 class "ブザー" as buzzer #lightpink {
@@ -123,17 +135,18 @@ class "ブザー" as buzzer #lightpink {
 }
 
 ' ----- 相互 ----
-level  ..  body
-body  ..  operation
-body  ..  tempCntl
-coverTop  ..  body
-coverTop  ..  operation
-body  ..  buzzer
-body .. error
-tempCntl .. error
-operation .. buzzer
-error .. buzzer
-body .. keepmode
+body ..> level
+operation  --  body
+coverTop  --  body
+errorWatch -- body
+body  --  tempCntl
+body  --  keepmode
+errorWatch ..> tempCntl
+operation ..> coverTop
+keepmode ..> coverTop
+body ..> buzzer
+operation ..> buzzer
+keepmode ..> buzzer
 
 ' ----- 配置 -----
 
