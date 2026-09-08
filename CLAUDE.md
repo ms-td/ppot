@@ -100,13 +100,37 @@ load-bearing for the design — the full-water sensor defaults **on** and each l
   exception and is a separate function.
 - Errors latch: they clear only by unplugging and replugging.
 
-### Known internal conflict
+### Known internal conflicts
 
-Sheet3's Japanese summary rows (`安全性要求`) disagree with sheet4's numbered requirements —
-summary says over-temp above 100°C and a 5°C "temperature not rising" margin and lists only two
-errors; `pot-500-11/-21/-31` say **110°C**, an **8°C** margin, and three errors including
-temp-not-falling (keep-warm above 98°C for over 3 min). **Follow sheet4 (`pot-500-*`)**; treat
-sheet3's overview as informal notes.
+Sheet3's overview rows disagree with sheet4's numbered requirements in two places. **In both,
+follow sheet4**; treat sheet3's overview as informal notes.
+
+1. **Error thresholds** (sheet3 `安全性要求`) — summary says over-temp above 100°C and a 5°C
+   "temperature not rising" margin, and lists only two errors; `pot-500-11/-21/-31` say **110°C**,
+   an **8°C** margin, and three errors including temp-not-falling (keep-warm above 98°C for over
+   3 min).
+
+2. **Re-boil on keep-warm mode change** (sheet3 `＜その他の動作仕様＞`) — sheet3 says
+   "保温モードに設定した際に100°Cでなかった場合、一度沸騰させたあと、自然に冷ましながら設定温度に保つ",
+   which would make every mode change leave 保温行為 for 沸騰行為 (the high mode keeps at 98°C, so
+   the water is essentially never at 100°C). Sheet4 contradicts this: `pot-240-21` only sets the
+   mode, and `pot-320-31` enumerates the stop conditions for 保温行為 as a **closed list** (error
+   detected / lid sensor off / all level sensors off / boil button pressed) that does **not**
+   include a mode change. So under sheet4 a mode change is an *internal* transition — 保温行為 is
+   not re-entered.
+
+   This matters for `pot-500-21` ("保温の各モードに**なって**3分以上水温が98°Cを超えていた場合"),
+   whose wording admits two readings: the 3-minute window restarts on entering 保温行為 only, or
+   also on every mode change. Keeping mode change internal picks the first, which is the reading
+   that cannot be evaded. Put the timer reset in 保温行為's entry action.
+
+   A related evasion does remain under sheet4: `pot-230-11` (boil button) legitimately leaves
+   保温行為, so pressing it every <3 min restarts the window. This is accepted as a known
+   limitation because the return path always runs カルキ抜き — `pot-311-11` holds the heater
+   unconditionally on for 3 minutes — while `pot-500-11` (110°C) is armed throughout, so an
+   anomaly that keeps the water above 98°C is more likely to trip `pot-500-11` there than to
+   escape detection. Record this reasoning rather than "users would not do that": `pot-500` is a
+   safety requirement.
 
 ## Working notes
 
