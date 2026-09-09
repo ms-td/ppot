@@ -4,10 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-This repository currently contains **no source code** — only the requirement specification
+This repository contains **no implementation code** — the requirement specification
 `話題沸騰ポット要求仕様書.xlsx` (the SESSAME "boiling pot" / electric kettle exercise spec,
-Japanese). There is no build system, test runner, or linter yet. If asked to implement the pot,
-the language/toolchain is an open decision — ask before assuming one.
+Japanese), the UML models built from it (`話題沸騰ポット.qeax`, `docs/analysis-analog/`), and the
+Python helpers under `scripts/` that read and write those two. There is no build system, test
+runner, or linter yet. If asked to implement the pot, the language/toolchain is an open decision —
+ask before assuming one.
 
 ## Reading the specification
 
@@ -87,7 +89,9 @@ load-bearing for the design — the full-water sensor defaults **on** and each l
 
 - Three temperature-control *actions* form the core state machine: 沸騰行為 (boil), 保温行為
   (keep-warm), and アイドル (idle, operation amount forced to 0%). Boil → keep-warm happens only
-  after the dechlorination hold; lid-off or all-level-sensors-off drops any action to idle.
+  after the dechlorination hold; lid-off or all-level-sensors-off drops any action to idle. Both
+  the boil button and a keep-warm **mode change** leave 保温行為 for 沸騰行為 (see Known internal
+  conflicts #2 for why the mode change does).
 - Boiling uses target-temperature ON/OFF control; keep-warm uses PID. The PID output is expressed
   incrementally: `ΔM = Kp(T1−T0) + Ki(Tg−T0) + Kd(2T1−T0−T2)`, `M0 = M1 + ΔM` clamped to 0–100%.
   M is a duty percentage of the control cycle, not a continuous power level.
@@ -102,35 +106,97 @@ load-bearing for the design — the full-water sensor defaults **on** and each l
 
 ### Known internal conflicts
 
-Sheet3's overview rows disagree with sheet4's numbered requirements in two places. **In both,
-follow sheet4**; treat sheet3's overview as informal notes.
+Sheet3's overview rows disagree with sheet4's numbered requirements in two places. They are
+resolved differently — **#1 follows sheet4, #2 follows sheet3** — so check the individual entry
+rather than assuming sheet4 always wins.
 
 1. **Error thresholds** (sheet3 `安全性要求`) — summary says over-temp above 100°C and a 5°C
    "temperature not rising" margin, and lists only two errors; `pot-500-11/-21/-31` say **110°C**,
    an **8°C** margin, and three errors including temp-not-falling (keep-warm above 98°C for over
    3 min).
 
-2. **Re-boil on keep-warm mode change** (sheet3 `＜その他の動作仕様＞`) — sheet3 says
+2. **Re-boil on keep-warm mode change** (sheet3 `＜その他の動作仕様＞`) — **decided: follow
+   sheet3. A mode change goes through 沸騰行為.** Sheet3 says
    "保温モードに設定した際に100°Cでなかった場合、一度沸騰させたあと、自然に冷ましながら設定温度に保つ",
-   which would make every mode change leave 保温行為 for 沸騰行為 (the high mode keeps at 98°C, so
-   the water is essentially never at 100°C). Sheet4 contradicts this: `pot-240-21` only sets the
-   mode, and `pot-320-31` enumerates the stop conditions for 保温行為 as a **closed list** (error
-   detected / lid sensor off / all level sensors off / boil button pressed) that does **not**
-   include a mode change. So under sheet4 a mode change is an *internal* transition — 保温行為 is
-   not re-entered.
+   so every mode change leaves 保温行為 for 沸騰行為 (the high mode keeps at 98°C, so the water is
+   essentially never at 100°C, making the "if not 100°C" guard true in practice — the check still
+   belongs in the model, since it is what the requirement states).
 
-   This matters for `pot-500-21` ("保温の各モードに**なって**3分以上水温が98°Cを超えていた場合"),
-   whose wording admits two readings: the 3-minute window restarts on entering 保温行為 only, or
-   also on every mode change. Keeping mode change internal picks the first, which is the reading
-   that cannot be evaded. Put the timer reset in 保温行為's entry action.
+   This was raised with the instructor while asking about
+   [docs/analysis-analog/memo.md](docs/analysis-analog/memo.md) item C and about how each mode's
+   target temperature gets re-applied to 温度制御. The reading was put forward from our side and
+   was not contradicted — and this instructor does normally push back with a specific `pot-NNN`
+   when a reading is wrong — so it is taken as accepted. It is an argument from silence, so if the
+   instructor later objects, this entry is the thing to revisit. Open question still live in
+   discussion: whether re-boiling on every mode change is actually *good* for usability (dropping
+   from 98°C to the milk mode's 60°C by first boiling to 100°C is hard to defend as a user
+   experience, and it is also the more energy-hungry path — `pot-312` exists precisely to avoid
+   wasted electricity).
 
-   A related evasion does remain under sheet4: `pot-230-11` (boil button) legitimately leaves
-   保温行為, so pressing it every <3 min restarts the window. This is accepted as a known
-   limitation because the return path always runs カルキ抜き — `pot-311-11` holds the heater
-   unconditionally on for 3 minutes — while `pot-500-11` (110°C) is armed throughout, so an
-   anomaly that keeps the water above 98°C is more likely to trip `pot-500-11` there than to
-   escape detection. Record this reasoning rather than "users would not do that": `pot-500` is a
-   safety requirement.
+   The tension with sheet4 is real and should be stated if asked, not hidden: `pot-240-21` only
+   says the mode is set, and `pot-320-31` enumerates the stop conditions for 保温行為 as a list
+   (error detected / lid sensor off / all level sensors off / boil button pressed) that does not
+   mention a mode change. Adopting sheet3 means reading that list as non-exhaustive.
+
+   Consequence for `pot-500-21` ("保温の各モードに**なって**3分以上水温が98°Cを超えていた場合"):
+   the 3-minute window resets on entry to 保温行為, and because a mode change now re-enters
+   保温行為, it resets on every mode change too. Keep the timer reset in 保温行為's entry action —
+   that single placement covers both.
+
+   That makes the window restartable by repeated user action, via two paths now: `pot-230-11`
+   (boil button) and a mode change. This is accepted as a known limitation because both return
+   paths always run カルキ抜き — `pot-311-11` holds the heater unconditionally on for 3 minutes —
+   while `pot-500-11` (110°C) is armed throughout, so an anomaly that keeps the water above 98°C
+   is more likely to trip `pot-500-11` there than to escape detection. Record this reasoning
+   rather than "users would not do that": `pot-500` is a safety requirement.
+
+## Modeling artifacts (Enterprise Architect)
+
+The UML models live in `話題沸騰ポット.qeax`, a **plain SQLite database** — it can be read and
+written directly with `sqlite3`/Python. Three rules before touching it:
+
+1. **Close EA first.** A running EA holds the project in memory and writes it back on exit, so any
+   direct edit made while it is open is silently lost. Check with PowerShell
+   `Get-Process EA` (`ea_scenarios.py` does this itself and refuses to import; from Git Bash,
+   `tasklist /FI ...` fails because MSYS rewrites the `/FI` switch as a path).
+2. **Back up first** (`cp` to `*.bak_YYYYmmdd_HHMMSS`; those backups are gitignored) and run
+   `pragma integrity_check` after.
+3. The `sqlite3` CLI cannot open the NFD-normalized Japanese filename on Windows — use Python's
+   `sqlite3` with `glob.glob('*.qeax')[0]`, the same trick `convert_spec.py` needs.
+
+### Scenario text ⇄ EA: `scripts/ea_scenarios.py`
+
+Communication diagrams live under the `コミュニケーション-シナリオ` package, one sub-package per
+scene, each holding a `Collaboration` diagram and a `User` **Actor used as the container for the
+scene's 事前条件 / 事後条件 / シナリオ** (the actor is deliberately not wired to the objects; this
+is what lets a scenario be reused across diagrams).
+
+`docs/analysis-analog/communication-scenarios.md` is the human-editable form of all of that, and
+the script moves it both ways:
+
+```
+python scripts/ea_scenarios.py export              # EA -> markdown
+python scripts/ea_scenarios.py import --dry-run    # show what would change
+python scripts/ea_scenarios.py import              # markdown -> EA
+```
+
+`import` never deletes: an empty section means "not written yet", and a constraint left over in EA
+is only warned about. Diagram coordinates are never touched; notes missing from a diagram are
+created (element + `NoteLink` + placement) unless `--no-notes`.
+
+Where things are stored, and the gotchas that make hand-written SQL fail:
+
+- 事前/事後条件 → `t_objectconstraint` (`ConstraintType` is the literal `事前条件`/`事後条件`).
+  `Constraint` is an SQL keyword — it must be quoted as `"Constraint"`.
+- シナリオ → `t_objectscenarios` (`Notes` holds the body).
+- The note shown on the diagram is a `t_object` row with `Object_Type='Note'`, and
+  **`PDATA3` holds the constraint's literal text (or the scenario's name) as its link key**
+  (`PDATA1`=`Constraint`/`Scenario`, `PDATA2`=owning element id, `Note`=rendered text). Editing the
+  constraint text without updating `PDATA3` blanks the placed note — which is exactly what happens
+  when it is edited through EA's GUI. Always update both. A consequence worth keeping in mind while
+  modeling: constraint text *is* an identifier, so wording has to be consistent across scenes.
+- When setting element visibility, `t_object.Scope` renders as Public when NULL — update every row,
+  not just the ones that already say `'Public'`.
 
 ## Working notes
 
