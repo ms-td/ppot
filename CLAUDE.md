@@ -89,9 +89,10 @@ load-bearing for the design — the full-water sensor defaults **on** and each l
 
 - Three temperature-control *actions* form the core state machine: 沸騰行為 (boil), 保温行為
   (keep-warm), and アイドル (idle, operation amount forced to 0%). Boil → keep-warm happens only
-  after the dechlorination hold; lid-off or all-level-sensors-off drops any action to idle. Both
-  the boil button and a keep-warm **mode change** leave 保温行為 for 沸騰行為 (see Known internal
-  conflicts #2 for why the mode change does).
+  after the dechlorination hold; lid-off or all-level-sensors-off drops any action to idle. What
+  leaves 保温行為 for 沸騰行為 is a **boil request**, raised either by the boil button or — after a
+  keep-warm mode change — by 保温モード itself once it sees the water is not at 100°C. The mode
+  change alone is internal and moves nothing (see Known internal conflicts #2).
 - Boiling uses target-temperature ON/OFF control; keep-warm uses PID. The PID output is expressed
   incrementally: `ΔM = Kp(T1−T0) + Ki(Tg−T0) + Kd(2T1−T0−T2)`, `M0 = M1 + ΔM` clamped to 0–100%.
   M is a duty percentage of the control cycle, not a continuous power level.
@@ -115,35 +116,49 @@ rather than assuming sheet4 always wins.
    an **8°C** margin, and three errors including temp-not-falling (keep-warm above 98°C for over
    3 min).
 
-2. **Re-boil on keep-warm mode change** (sheet3 `＜その他の動作仕様＞`) — **decided: follow
-   sheet3. A mode change goes through 沸騰行為.** Sheet3 says
-   "保温モードに設定した際に100°Cでなかった場合、一度沸騰させたあと、自然に冷ましながら設定温度に保つ",
-   so every mode change leaves 保温行為 for 沸騰行為 (the high mode keeps at 98°C, so the water is
-   essentially never at 100°C, making the "if not 100°C" guard true in practice — the check still
-   belongs in the model, since it is what the requirement states).
+2. **Re-boil on keep-warm mode change** (sheet3 `＜その他の動作仕様＞`) — **two separate questions
+   that are easy to conflate. Keep them apart; the answers differ.**
 
-   This was raised with the instructor while asking about
+   **(a) Does setting the mode itself move the state machine? No.** `pot-240-21` is internal to
+   保温モード: it beeps, advances モード, sets the matching 保温温度, and updates the mode display.
+   保温行為 is not left, and `pot-320-31`'s stop-condition list (error detected / lid sensor off /
+   all level sensors off / boil button pressed) correctly does not mention a mode change. Sheet4's
+   reading holds for this half.
+
+   **(b) When does the newly set temperature actually reach 温度制御 — i.e. when does the heat
+   change? Only by going through 沸騰行為.** This is what sheet3 describes
+   ("保温モードに設定した際に100°Cでなかった場合、一度沸騰させたあと、自然に冷ましながら設定温度に保つ")
+   and it is the question the instructor was actually asking — the path and timing by which a
+   mode's target temperature is applied to real heating. After the mode is set, 保温モード checks
+   the water temperature and, if it is not 100°C, sends a **boil request** to ポット. The state
+   change is caused by that request — the same event path as the boil button — not by the mode
+   change as such. The new 保温温度 reaches 温度制御 only when 保温行為 is entered again after
+   カルキ抜き completes. In practice the guard is always true (the high mode holds 98°C, so the
+   water is essentially never at 100°C), but keep the check in the model: it is what the
+   requirement states.
+
+   Provenance: raised with the instructor while asking about
    [docs/analysis-analog/memo.md](docs/analysis-analog/memo.md) item C and about how each mode's
    target temperature gets re-applied to 温度制御. The reading was put forward from our side and
    was not contradicted — and this instructor does normally push back with a specific `pot-NNN`
    when a reading is wrong — so it is taken as accepted. It is an argument from silence, so if the
    instructor later objects, this entry is the thing to revisit. Open question still live in
-   discussion: whether re-boiling on every mode change is actually *good* for usability (dropping
-   from 98°C to the milk mode's 60°C by first boiling to 100°C is hard to defend as a user
-   experience, and it is also the more energy-hungry path — `pot-312` exists precisely to avoid
-   wasted electricity).
+   discussion: whether re-boiling after every mode change is actually *good* for usability
+   (dropping from 98°C to the milk mode's 60°C by first boiling to 100°C is hard to defend as a
+   user experience, and it is also the more energy-hungry path — `pot-312` exists precisely to
+   avoid wasted electricity).
 
-   The tension with sheet4 is real and should be stated if asked, not hidden: `pot-240-21` only
-   says the mode is set, and `pot-320-31` enumerates the stop conditions for 保温行為 as a list
-   (error detected / lid sensor off / all level sensors off / boil button pressed) that does not
-   mention a mode change. Adopting sheet3 means reading that list as non-exhaustive.
+   Residual tension with sheet4, worth stating if asked rather than hiding: the boil request that
+   follows a mode change is not in `pot-320-31`'s list either — only 沸騰ボタン押下 is — so that
+   list is still being read as non-exhaustive. What (a) buys is that the exception is an ordinary
+   boil request, not a special "mode change leaves 保温行為" rule.
 
    Consequence for `pot-500-21` ("保温の各モードに**なって**3分以上水温が98°Cを超えていた場合"):
-   the 3-minute window resets on entry to 保温行為, and because a mode change now re-enters
-   保温行為, it resets on every mode change too. Keep the timer reset in 保温行為's entry action —
-   that single placement covers both.
+   the 3-minute window resets on entry to 保温行為. Since the mode-change path leaves and re-enters
+   保温行為 through 沸騰行為, it resets there too. Keep the timer reset in 保温行為's entry action —
+   that single placement covers every path.
 
-   That makes the window restartable by repeated user action, via two paths now: `pot-230-11`
+   That makes the window restartable by repeated user action, via two paths: `pot-230-11`
    (boil button) and a mode change. This is accepted as a known limitation because both return
    paths always run カルキ抜き — `pot-311-11` holds the heater unconditionally on for 3 minutes —
    while `pot-500-11` (110°C) is armed throughout, so an anomaly that keeps the water above 98°C
