@@ -13,6 +13,10 @@
 
 ノートがまだ貼られていない図には、ノート要素と NoteLink を既存図と同じレイアウトで作る
 (--no-notes で抑止)。位置は後から EA で自由に動かしてよい。
+
+1 つのパッケージに Collaboration 図が複数あるとき (同じシーンを別の粒度で描いた変種など) は、
+シナリオ見出しの `@図名` でノートを貼る図を指定する。同じキーのノートが複数の図に貼られている
+場合は、更新時に全部が同じ内容に揃えられる。
 """
 import argparse
 import datetime
@@ -50,6 +54,8 @@ HEADER = """<!-- このファイルと EA (話題沸騰ポット.qeax) は scrip
        ブロック内の複数行は「1 つの制約の中の複数行」として扱う (現状の EA の入り方と同じ)
      - `### シナリオ:基本` の `基本` がシナリオ名 (EA 側のキー)。`### シナリオ:別名 [代替]`
        のように後ろに [ ] を付けると ScenarioType を分けられる
+     - パッケージに Collaboration 図が複数あるときは `### シナリオ:別名 [代替] @図名`
+       の `@図名` でノートを貼る図を指定する (省略時はパッケージ内の先頭の図)
      - 本文が空の節は「未記入」とみなして import では何もしない。EA 側の削除は手作業で
 -->
 
@@ -101,20 +107,41 @@ def scenes(con):
         actor = con.execute("select Object_ID from t_object "
                             "where Package_ID=? and Object_Type='Actor' and Name=?",
                             (p['Package_ID'], ACTOR_NAME)).fetchone()
-        diag = con.execute("select Diagram_ID from t_diagram "
-                           "where Package_ID=? and Diagram_Type='Collaboration'",
-                           (p['Package_ID'],)).fetchone()
+        diags = {r['Name']: r['Diagram_ID'] for r in
+                 con.execute("select Diagram_ID,Name from t_diagram "
+                             "where Package_ID=? and Diagram_Type='Collaboration' "
+                             "order by Diagram_ID", (p['Package_ID'],))}
         out.append((p['Package_ID'], p['Name'],
-                    actor['Object_ID'] if actor else None,
-                    diag['Diagram_ID'] if diag else None))
+                    actor['Object_ID'] if actor else None, diags))
     return out
+
+
+def pick_diagram(diags, wanted, where=''):
+    """`@図名` から図を選ぶ。省略時はパッケージ内の最初の Collaboration 図。"""
+    if wanted:
+        if wanted in diags:
+            return diags[wanted]
+        print('!! 図が見つからない: %s%s' % (wanted, ' (%s)' % where if where else ''))
+        return None
+    return next(iter(diags.values()), None)
+
+
+def note_diagram(con, actor_id, kind, key):
+    """ノートが載っている図の名前。無ければ None。"""
+    r = con.execute("""select d.Name from t_object o
+                       join t_diagramobjects x on x.Object_ID=o.Object_ID
+                       join t_diagram d on d.Diagram_ID=x.Diagram_ID
+                       where o.Object_Type='Note' and o.PDATA1=? and o.PDATA2=? and o.PDATA3=?
+                       order by d.Diagram_ID""",
+                    (kind, str(actor_id), key)).fetchone()
+    return r['Name'] if r else None
 
 
 # ------------------------------------------------------------------ export
 
 def do_export(con, path):
     parts = [HEADER]
-    for pkg_id, name, actor_id, _ in scenes(con):
+    for pkg_id, name, actor_id, diags in scenes(con):
         parts.append('\n## %s\n' % name)
         if actor_id is None:
             parts.append('\n<!-- %s アクターが無い -->\n' % ACTOR_NAME)
@@ -135,12 +162,17 @@ def do_export(con, path):
             head = '### シナリオ:%s' % r['Scenario']
             if r['ScenarioType'] and r['ScenarioType'] != r['Scenario']:
                 head += ' [%s]' % r['ScenarioType']
+            if len(diags) > 1:          # 先頭の図でないときだけ貼り先を明示する
+                dn = note_diagram(con, actor_id, 'Scenario', r['Scenario'])
+                if dn and dn != next(iter(diags)):
+                    head += ' @%s' % dn
             body = lf(r['Notes']).strip()
             parts.append('\n%s\n\n' % head + (body + '\n' if body else ''))
         if not found:
             parts.append('\n### シナリオ:基本\n\n')
 
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if os.path.dirname(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w', encoding='utf-8', newline='\n') as fh:
         fh.write(''.join(parts))
     print('wrote:', path)
@@ -150,15 +182,19 @@ def do_export(con, path):
 
 RE_SCENE = re.compile(r'^##\s+(?P<name>\S.*?)\s*$')
 RE_SECTION = re.compile(r'^###\s*(?P<kind>事前条件|事後条件|シナリオ)'
-                        r'(?:[:：]\s*(?P<name>[^\[\]]+?))?\s*'
-                        r'(?:\[(?P<type>[^\]]+)\])?\s*$')
+                        r'(?:[:：]\s*(?P<name>[^\[\]@]+?))?\s*'
+                        r'(?:\[(?P<type>[^\]]+)\])?\s*'
+                        r'(?:@\s*(?P<diagram>\S.*?))?\s*$')
 
 
 def parse_md(path, known_names=None):
-    """-> [(scene_name, [(kind, name, type, body_text)])]
+    """-> [(scene_name, [(kind, name, type, diagram, body_text)])]
 
     known_names を渡すと、それに一致する `## 見出し` だけをシーンの区切りとみなす。
     シナリオ本文にコメントとして `##` で始まる行が来ても壊れないようにするため。
+
+    `### シナリオ:名前 [種別] @図名` の `@図名` は、そのシナリオのノートを貼る図。
+    パッケージに Collaboration 図が複数あるときだけ意味を持つ (省略時は先頭の図)。
     """
     with open(path, encoding='utf-8') as fh:
         text = fh.read()
@@ -168,8 +204,8 @@ def parse_md(path, known_names=None):
 
     def close_sec():
         if sec is not None:
-            kind, nm, ty, buf = sec
-            cur[1].append((kind, nm, ty, '\n'.join(buf).strip()))
+            kind, nm, ty, dg, buf = sec
+            cur[1].append((kind, nm, ty, dg, '\n'.join(buf).strip()))
 
     for line in text.splitlines():
         m = RE_SCENE.match(line)
@@ -183,10 +219,11 @@ def parse_md(path, known_names=None):
         if m and cur is not None:
             close_sec()
             sec = (m.group('kind'), (m.group('name') or '').strip(),
-                   (m.group('type') or '').strip(), [])
+                   (m.group('type') or '').strip(),
+                   (m.group('diagram') or '').strip(), [])
             continue
         if sec is not None:
-            sec[3].append(line)
+            sec[4].append(line)
     close_sec()
     return out
 
@@ -206,11 +243,18 @@ class Importer:
         print(('  [dry] ' if self.dry else '  ') + fmt % a)
 
     # -- notes ------------------------------------------------------------
-    def note_row(self, actor_id, kind, key):
+    def note_rows(self, actor_id, kind, key):
+        """同じキーのノートは複数の図に貼られていることがあるので全部返す。"""
         return self.con.execute(
             "select Object_ID from t_object where Object_Type='Note' "
             "and PDATA1=? and PDATA2=? and PDATA3=?",
-            (kind, str(actor_id), key)).fetchone()
+            (kind, str(actor_id), key)).fetchall()
+
+    @staticmethod
+    def note_mark(n):
+        if not n:
+            return ' (ノート未配置)'
+        return '' if n == 1 else ' (ノート%d枚)' % n
 
     def note_text(self, kind, ctype, key, body):
         if kind == 'Constraint':
@@ -218,14 +262,16 @@ class Importer:
         return crlf('%s\n%s' % (key, body))
 
     def update_note(self, actor_id, kind, old_key, new_key, ctype, body):
-        row = self.note_row(actor_id, kind, old_key)
-        if not row:
-            return False
+        rows = self.note_rows(actor_id, kind, old_key)
+        if not rows:
+            return 0
         if not self.dry:
-            self.con.execute('update t_object set PDATA3=?,Note=?,ModifiedDate=? where Object_ID=?',
-                             (crlf(new_key) if kind == 'Constraint' else new_key,
-                              self.note_text(kind, ctype, new_key, body), self.now, row['Object_ID']))
-        return True
+            for row in rows:
+                self.con.execute(
+                    'update t_object set PDATA3=?,Note=?,ModifiedDate=? where Object_ID=?',
+                    (crlf(new_key) if kind == 'Constraint' else new_key,
+                     self.note_text(kind, ctype, new_key, body), self.now, row['Object_ID']))
+        return len(rows)
 
     def create_note(self, pkg_id, diag_id, actor_id, kind, ctype, key, body, index):
         if not self.place_notes or diag_id is None:
@@ -292,8 +338,8 @@ class Importer:
                 if not self.dry:
                     self.con.execute('update t_objectconstraint set "Constraint"=? where rowid=?',
                                      (new, old[i]['rid']))
-                relinked = self.update_note(actor_id, 'Constraint', old[i]['c'], new, ctype, body)
-                self.say('%s 更新%s: %s', ctype, '' if relinked else ' (ノート未配置)',
+                n = self.update_note(actor_id, 'Constraint', old[i]['c'], new, ctype, body)
+                self.say('%s 更新%s: %s', ctype, self.note_mark(n),
                          body.splitlines()[0][:40])
             else:
                 if not self.dry:
@@ -319,8 +365,8 @@ class Importer:
             if not self.dry:
                 self.con.execute('update t_objectscenarios set Notes=?,ScenarioType=? where rowid=?',
                                  (new, stype, row['rid']))
-            relinked = self.update_note(actor_id, 'Scenario', name, name, stype, body)
-            self.say('シナリオ 更新%s: %s', '' if relinked else ' (ノート未配置)', name)
+            n = self.update_note(actor_id, 'Scenario', name, name, stype, body)
+            self.say('シナリオ 更新%s: %s', self.note_mark(n), name)
         else:
             if not self.dry:
                 self.con.execute("""insert into t_objectscenarios
@@ -332,23 +378,26 @@ class Importer:
 
     # -- driver -----------------------------------------------------------
     def run(self, doc):
-        known = {name: (pid, aid, did) for pid, name, aid, did in scenes(self.con)}
+        known = {name: (pid, aid, dg) for pid, name, aid, dg in scenes(self.con)}
         for scene_name, sections in doc:
             if scene_name not in known:
                 print('!! EA にパッケージが無い:', scene_name)
                 continue
-            pkg_id, actor_id, diag_id = known[scene_name]
+            pkg_id, actor_id, diags = known[scene_name]
             if actor_id is None:
                 print('!! %s アクターが無い: %s' % (ACTOR_NAME, scene_name))
                 continue
             print('#', scene_name)
             n_sc = 0
-            for kind, name, stype, body in sections:
+            for kind, name, stype, dgname, body in sections:
                 if kind in CONSTRAINT_TYPES:
                     blocks = [b.strip() for b in re.split(r'\n\s*\n', body) if b.strip()]
-                    self.sync_constraints(pkg_id, diag_id, actor_id, kind, blocks)
+                    self.sync_constraints(pkg_id, pick_diagram(diags, dgname, scene_name),
+                                          actor_id, kind, blocks)
                 else:
-                    self.sync_scenario(pkg_id, diag_id, actor_id, name or '基本', stype, body, n_sc)
+                    diag_id = pick_diagram(diags, dgname, scene_name)
+                    self.sync_scenario(pkg_id, diag_id, actor_id, name or '基本',
+                                       stype, body, n_sc)
                     n_sc += 1
 
 
