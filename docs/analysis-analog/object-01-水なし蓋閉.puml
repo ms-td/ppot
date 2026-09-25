@@ -41,33 +41,17 @@ object "第1,2,3,4:水位センサ" as s1 #lightcyan {
 object "満水センサ" as s5 #lightcyan {
     検出値 = off [pot-110-11]
 }
-object "第1,2,3,4:インジケータセル" as c1 #lightgray {
-    本当は4つ実体がある
-    ===
-    番号 = 1 (対応第1水位センサ)
-    表示 = 空パターン [pot-280-41]
-    ---
-    番号 = 2 (対応第2水位センサ)
-    表示 = 空パターン [pot-280-41]
-    ----
-    番号 = 3 (対応第3水位センサ)
-    表示 = 空パターン [pot-280-41]
-    ----
-    番号 = 4 (対応第4水位センサ)
-    表示 = 空パターン [pot-280-41]
-}
 }
 
 rectangle "-" as cover {
 object "蓋" as vm {
     閉 = true
+    閉検出時間 = 3s [pot-220-11]
+    開検出時間 = 1s [pot-221-11]
 }
 object "蓋センサ" as s6 #lightcyan {
     検出値 = on [pot-110-15, 仮定]
 }
-note as delay
-    蓋センサ off: 1s, on: 3s [pot-220-11, pot-221-11]
-end note
 }
 
 rectangle "-" as output {
@@ -75,19 +59,8 @@ object "給湯口" as op {
     ロック = 解除 [pot-250-11]
     給湯中 = false
 }
-object "解除ボタン:ボタン" as b2 #lightcyan {
-    押下 = 開放 [仮定]
-    有効性 = 許可 [pot-250-21]
-}
 object "ポンプ" as pp #lightpink {
     駆動中 = off
-}
-object "ロックランプ:ランプ" as ll #lightgray {
-    表示 = 消灯 [pot-250-11]
-}
-object "給湯ボタン:ボタン" as b1 #lightcyan {
-    押下 = 開放 [仮定]
-    有効性 = 無効 [pot-260-11]
 }
 }
 
@@ -98,18 +71,27 @@ object "温度制御" as tm {
     水温 = 室温
     制御方式* = なし
     操作量M = 0%
+    経過時間 = 0
+    カルキ抜き待機時間 = 3分 [pot-311-11]
+    制御周期 = 定数
 }
 object "ヒータ" as ht #lightpink {
-    駆動中 = 0%
+    駆動中 = off
+    PWM = 0%
 }
 object "ヒータ用電源" as hp #lightpink {
     駆動中 = 給電中 [pot-110-18]
 }
-object "温度表示" as ts #lightgray {
-    表示 = なし [pot-330-42]
-}
 object "サーミスタ" as ss #lightcyan {
     検出値 = 室温 [仮定]
+}
+object "温度エラー監視" as error {
+    検知したエラー = なし
+    監視中 = false
+    監視対象行為 = なし
+    前回水温 = 室温
+    経過時間 = 0
+    検出周期 = 1分 [pot-500-31]
 }
 }
 
@@ -118,19 +100,16 @@ rectangle "-" as main {
 object "ポット" as wm {
     現在状態* = アイドル
 }
-note as idle
-    アイドル [6.1]:ポット状態
 
+object "アイドル:ポット状態" as idle {
+}
+
+note as transition
     待機イベント => 沸騰要求 [6.2]
     次状態 => 加熱中(沸騰行為) [6.1, 6.3]
     ガード => 蓋.閉 ∩ !水位.満水 ∩ !水位.空
 end note
-object "保温ランプ:ランプ" as kl #lightgray {
-    表示 = 消灯 [pot-330-41]
-}
-object "沸騰ランプ:ランプ" as bl #lightgray {
-    表示 = 消灯 [pot-330-41]
-}
+
 }
 
 rectangle "-" as keeper {
@@ -138,29 +117,74 @@ object "保温モード" as mm {
     モード = 高温モード [pot-240-11]
     保温温度 = 98 [pot-240-31]
 }
+}
+
+rectangle "-" as uipanel {
+object "表示部" as view
+object "操作部" as panel
+object "ブザー" as bz #lightpink {
+    駆動中 = off
+    鳴動残り時間 = 0
+    鳴動残り回数 = 0
+}
 object "モード表示" as ms #lightgray {
     表示 = 高温 [pot-240-41]
 }
 object "沸騰ボタン:ボタン" as b3 #lightcyan {
-    押下 = 開放 [仮定]
+    押下状態 = 開放 [仮定]
     有効性 = 無効 [pot-230-11]
+    受け入れ時間 = 100ms [pot-230-11]
+}
+object "給湯ボタン:ボタン" as b1 #lightcyan {
+    押下状態 = 開放 [仮定]
+    有効性 = 無効 [pot-260-11]
+    受け入れ時間 = 0ms
+}
+object "解除ボタン:ボタン" as b2 #lightcyan {
+    押下状態 = 開放 [仮定]
+    有効性 = 有効 [pot-250-21]
+    受け入れ時間 = 100ms [pot-250-21]
 }
 object "保温設定ボタン:ボタン" as b5 #lightcyan {
-    押下 = 開放 [仮定]
-    有効性 = 許可 [pot-240-21]
+    押下状態 = 開放 [仮定]
+    有効性 = 有効 [pot-240-21]
+    受け入れ時間 = 100ms [pot-240-21]
 }
+object "ロックランプ:ランプ" as ll #lightgray {
+    点灯状態 = 消灯 [pot-250-11]
 }
-
-object "温度エラー監視" as error {
-    検知したエラー = なし
-    監視中 = false
-    監視対象行為 = なし
-    前回水温 = 室温
-    経過時間 = 0
+object "保温ランプ:ランプ" as kl #lightgray {
+    点灯状態 = 消灯 [pot-330-41]
 }
-
-object "ブザー" as bz #lightpink {
-    駆動中 = off
+object "沸騰ランプ:ランプ" as bl #lightgray {
+    点灯状態 = 消灯 [pot-330-41]
+}
+object "温度表示" as ts #lightgray {
+    表示 = なし [pot-330-42]
+}
+object "第1,2,3,4:インジケータセル" as c1 #lightgray {
+    本当は4つ実体がある
+    ===
+    番号 = 1 (対応第1水位センサ)
+    点灯パターン = 空パターン [pot-280-41]
+    点滅周期(点灯) = 200msec [pot-280-41]
+    点滅周期(消灯) = 500msec [pot-280-41]
+    ---
+    番号 = 2 (対応第2水位センサ)
+    点灯パターン = 空パターン [pot-280-41]
+    点滅周期(点灯) = 200msec [pot-280-41]
+    点滅周期(消灯) = 500msec [pot-280-41]
+    ----
+    番号 = 3 (対応第3水位センサ)
+    点灯パターン = 空パターン [pot-280-41]
+    点滅周期(点灯) = 200msec [pot-280-41]
+    点滅周期(消灯) = 500msec [pot-280-41]
+    ----
+    番号 = 4 (対応第4水位センサ)
+    点灯パターン = 空パターン [pot-280-41]
+    点滅周期(点灯) = 200msec [pot-280-41]
+    点滅周期(消灯) = 500msec [pot-280-41]
+}
 }
 
 ' ----- 水 -----
@@ -170,48 +194,53 @@ sl -- s1
 sl -- s1
 sl -- s5
 
-sl -- c1
-sl -- c1
-sl -- c1
-sl -- c1
-
 ' ----- 蓋・ロック -----
 vm -- s6
-ll -- op
 op -- pp
-op -- b2
-op -- b1
 
 ' ----- 温度制御 -----
 tm -- ht
 tm -- hp
 tm -- ss
-tm -- ts
 ht <.. hp : 電力の供給
 
 ' ----- モード -----
-mm -- b5
-mm -- ms
-mm -- vm
-mm -- b3
 
 ' ----- ポット本体 -----
-wm -- kl
-wm -- bl
-wm -- bz
+wm -- idle
+idle .. transition
+
+' ----- 表示部 -----
+view -- c1
+view -- c1
+view -- c1
+view -- c1
+view -- ll
+view -- kl
+view -- bl
+view -- ms
+view -- ts
+
+' ----- 操作部 -----
+panel -- b1
+panel -- b2
+panel -- b3
+panel -- b5
+panel -- bz
 
 ' ----- 相互 ----
-sl -- vm
 sl -- wm
+sl -- view
 wm -- op
 wm -- tm
 vm -- wm
-vm -- op
 wm -- mm
 tm -- error
 wm -- error
-bz -- mm
-bz -- op
+wm -- panel
+wm -- view
+mm -- view
+tm -- view
 
 ' ----- 配置 -----
 water --d[hidden]-- main
