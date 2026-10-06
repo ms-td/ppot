@@ -28,6 +28,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import unicodedata
 import uuid
 
 PARENT_PKG = 15                     # コミュニケーション-シナリオ
@@ -66,9 +67,12 @@ HEADER = """<!-- このファイルと EA (話題沸騰ポット.qeax) は scrip
 # ---------------------------------------------------------------- utilities
 
 def find_db():
-    hits = glob.glob('*.qeax')
+    # 作業用コピーなど別の *.qeax が同居することがあるので、名前で本体を選ぶ
+    # (ファイル名は NFD のことがあるので正規化して比べる)
+    hits = [h for h in glob.glob('*.qeax')
+            if unicodedata.normalize('NFC', h) == '話題沸騰ポット.qeax']
     if not hits:
-        sys.exit('*.qeax が見つからない。リポジトリのルートで実行すること。')
+        sys.exit('話題沸騰ポット.qeax が見つからない。リポジトリのルートで実行すること。')
     return hits[0]
 
 

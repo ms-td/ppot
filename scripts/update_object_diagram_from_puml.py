@@ -26,6 +26,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import unicodedata
 import uuid
 
 AUTHOR = 'm-sasaki'
@@ -258,7 +259,8 @@ def main():
     args = ap.parse_args()
     if ea_running() and not args.force and not args.dry_run:
         sys.exit('EA が起動中。閉じてから実行すること (--force で無視)。')
-    db = glob.glob('*.qeax')[0]
+    db = next(h for h in glob.glob('*.qeax')
+              if unicodedata.normalize('NFC', h) == '話題沸騰ポット.qeax')
     if not args.dry_run:
         bak = db + datetime.datetime.now().strftime('.bak_%Y%m%d_%H%M%S')
         shutil.copy2(db, bak); print('backup:', bak)
