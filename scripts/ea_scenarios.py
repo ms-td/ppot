@@ -5,6 +5,7 @@
     python scripts/ea_scenarios.py export              # EA -> docs/analysis-analog/communication-scenarios.md
     python scripts/ea_scenarios.py import --dry-run    # 差分だけ表示
     python scripts/ea_scenarios.py import              # テキスト -> EA (自動バックアップあり)
+    python scripts/ea_scenarios.py -m 分析-クラス指定 export   # 別の分析パッケージ (テキストも別ファイル)
 
 事前/事後条件は t_objectconstraint、シナリオは t_objectscenarios に入っており、図に貼られた
 ノートは t_object(Object_Type='Note') の PDATA3 に「制約文そのもの/シナリオ名」をキーとして
@@ -31,12 +32,17 @@ import sys
 import unicodedata
 import uuid
 
-PARENT_PKG = 15                     # コミュニケーション-シナリオ
+PARENT_PKG = None                   # <モデル>/コミュニケーション-シナリオ (main で決める)
+SCENE_PKG = 'コミュニケーション-シナリオ'
 ACTOR_NAME = 'User'                 # シナリオの器にしているアクター
 AUTHOR = 'm-sasaki'
 STATUS = '設計中'
 CONSTRAINT_TYPES = ('事前条件', '事後条件')
-DEFAULT_MD = os.path.join('docs', 'analysis-analog', 'communication-scenarios.md')
+# モデル (最上位の分析パッケージ) ごとのテキスト版
+MODELS = {
+    '分析': os.path.join('docs', 'analysis-analog', 'communication-scenarios.md'),
+    '分析-クラス指定': os.path.join('docs', 'analysis-analog', 'communication-scenarios-クラス指定.md'),
+}
 
 # ノート未配置のときに使う配置 (既存図 Diagram_ID=13 の実測値)。単位は EA の図座標で y は負。
 NOTE_RECT = {
@@ -411,7 +417,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('mode', choices=['export', 'import'])
-    ap.add_argument('-f', '--file', default=DEFAULT_MD)
+    ap.add_argument('-m', '--model', default='分析', choices=list(MODELS),
+                    help='どの分析パッケージのシナリオか (既定: 分析)')
+    ap.add_argument('-f', '--file', help='テキスト版 (既定: --model に対応するファイル)')
+    ap.add_argument('--db', help='.qeax (既定: 話題沸騰ポット.qeax)')
     ap.add_argument('--dry-run', action='store_true')
     ap.add_argument('--no-notes', action='store_true', help='ノート未配置でも図に貼らない')
     ap.add_argument('--force', action='store_true', help='EA が起動中でも実行する')
@@ -420,9 +429,16 @@ def main():
     if ea_running() and not args.force and not (args.mode == 'export' or args.dry_run):
         sys.exit('EA が起動中。閉じてから実行すること (--force で無視)。')
 
-    db = find_db()
+    db = args.db or find_db()
     con = sqlite3.connect(db)
     con.row_factory = sqlite3.Row
+    global PARENT_PKG
+    r = con.execute('select p.Package_ID from t_package p join t_package q on q.Package_ID=p.Parent_ID '
+                    'where q.Name=? and p.Name=?', (args.model, SCENE_PKG)).fetchall()
+    if len(r) != 1:
+        sys.exit(f'{args.model}/{SCENE_PKG} が {len(r)} 個ある。')
+    PARENT_PKG = r[0]['Package_ID']
+    args.file = args.file or MODELS[args.model]
 
     if args.mode == 'export':
         do_export(con, args.file)

@@ -177,7 +177,25 @@ written directly with `sqlite3`/Python. Three rules before touching it:
 2. **Back up first** (`cp` to `*.bak_YYYYmmdd_HHMMSS`; those backups are gitignored) and run
    `pragma integrity_check` after.
 3. The `sqlite3` CLI cannot open the NFD-normalized Japanese filename on Windows — use Python's
-   `sqlite3` with `glob.glob('*.qeax')[0]`, the same trick `convert_spec.py` needs.
+   `sqlite3` and glob for it. Other `*.qeax` files (e.g. a copy handed back by the instructor) may
+   sit next to it, so select the main one **by its NFC-normalized name**, never `glob(...)[0]`.
+
+### Two analysis models in one file
+
+Since 2026-10-08 the file holds two parallel analysis models with the same inner layout
+(`クラス/` + `コミュニケーション-シナリオ/`):
+
+- `分析` — our own design (state subclasses with overridden `イベント通知`, `温度制御器` + control
+  Strategy, …). Kept as the record of what was submitted up to 2026-10-07.
+- `分析-クラス指定` — rebuilt on the **class structure the instructor handed back** (class diagram
+  `電子ポット`: ポット状態 holds the top-level state as an enum and owns 沸騰行為/保温行為, no
+  温度制御器). Its state machines and communication diagrams started as copies of `分析`'s and are
+  being reworked; this is where new work goes.
+
+Same-named classes exist in both, so anything that looks elements up **by name must also pin the
+model package**. The copy was made with `scripts/ea_copy.py` (ID/GUID-renumbering copy of
+elements, diagrams, connectors and their `t_xref`/tag references, with hooks to re-point instance
+classifiers and message operations to another package's classes); it is reusable for similar moves.
 
 ### Scenario text ⇄ EA: `scripts/ea_scenarios.py`
 
@@ -193,7 +211,11 @@ the script moves it both ways:
 python scripts/ea_scenarios.py export              # EA -> markdown
 python scripts/ea_scenarios.py import --dry-run    # show what would change
 python scripts/ea_scenarios.py import              # markdown -> EA
+python scripts/ea_scenarios.py -m 分析-クラス指定 export   # the other model
 ```
+
+`-m` picks the model package (default `分析`); each model has its own text file
+(`communication-scenarios.md` / `communication-scenarios-クラス指定.md`).
 
 `import` never deletes: an empty section means "not written yet", and a constraint left over in EA
 is only warned about. Diagram coordinates are never touched; notes missing from a diagram are
