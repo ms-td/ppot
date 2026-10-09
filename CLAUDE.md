@@ -217,6 +217,18 @@ python scripts/ea_scenarios.py -m 分析-クラス指定 export   # the other mo
 `-m` picks the model package (default `分析`); each model has its own text file
 (`communication-scenarios.md` / `communication-scenarios-クラス指定.md`).
 
+Sequence diagrams (`<model>/シーケンス図/<short name>`) are generated from the communication
+diagrams by `scripts/ea_sequence_from_comm.py` (`-m` as above, `--dry-run`): new lifeline instances
+per scene, the scene's `User` actor plus a 基本-scenario note linked to it (same PDATA3 key, so
+`ea_scenarios.py import` keeps it in sync), one unnamed User→target message per numbered
+"N. Userは…" step, then the communication messages in order with operations re-resolved by name.
+A synchronous call with a non-empty `retval=` gets a return message named by that value, placed
+where the call's nesting closes, and the call's own `retval` is cleared (UML carries a return value
+on the reply only; the communication diagram keeps its `retval` as the source). For `Sequence` connectors **`PDATA4` is the is-return flag**
+(`'0'` call / `'1'` return); leaving it NULL makes EA draw some calls as returns.
+Re-running reuses existing messages (same ends + name) and only adds what is missing; layout is
+mechanical and meant to be tidied in EA.
+
 `import` never deletes: an empty section means "not written yet", and a constraint left over in EA
 is only warned about. Diagram coordinates are never touched; notes missing from a diagram are
 created (element + `NoteLink` + placement) unless `--no-notes`.
