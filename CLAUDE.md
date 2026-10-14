@@ -91,7 +91,8 @@ load-bearing for the design — the full-water sensor defaults **on** and each l
   (keep-warm), and アイドル (idle, operation amount forced to 0%). Boil → keep-warm happens only
   after the dechlorination hold; lid-off or all-level-sensors-off drops any action to idle. What
   leaves 保温行為 for 沸騰行為 is a **boil request**, raised either by the boil button or — after a
-  keep-warm mode change — by 保温モード itself once it sees the water is not at 100°C. The mode
+  keep-warm mode change — once the water is found not to be at 100°C (which object checks depends
+  on the model; in `分析-クラス指定` it is ポット, asking ポット状態 for the current water temperature). The mode
   change alone is internal and moves nothing (see Known internal conflicts #2).
 - Boiling uses target-temperature ON/OFF control; keep-warm uses PID. The PID output is expressed
   incrementally: `ΔM = Kp(T1−T0) + Ki(Tg−T0) + Kd(2T1−T0−T2)`, `M0 = M1 + ΔM` clamped to 0–100%.
@@ -129,13 +130,18 @@ rather than assuming sheet4 always wins.
    change? Only by going through 沸騰行為.** This is what sheet3 describes
    ("保温モードに設定した際に100°Cでなかった場合、一度沸騰させたあと、自然に冷ましながら設定温度に保つ")
    and it is the question the instructor was actually asking — the path and timing by which a
-   mode's target temperature is applied to real heating. After the mode is set, 保温モード checks
-   the water temperature and, if it is not 100°C, sends a **boil request** to ポット. The state
+   mode's target temperature is applied to real heating. After the mode is set, the water
+   temperature is checked and, if it is not 100°C, a **boil request** is raised. The state
    change is caused by that request — the same event path as the boil button — not by the mode
    change as such. The new 保温温度 reaches 温度制御 only when 保温行為 is entered again after
-   カルキ抜き completes. In practice the guard is always true (the high mode holds 98°C, so the
-   water is essentially never at 100°C), but keep the check in the model: it is what the
-   requirement states.
+   カルキ抜き completes. Keep the "not at 100°C" check — it is not vacuous, even though every mode's
+   target is below 100°C. 保温行為 is only ever entered straight out of カルキ抜き (`pot-311-11`
+   holds the heater on for 3 min), so the water *is* at 100°C right then and is left to cool
+   naturally. A mode change in that window must **not** re-boil: the water is cooled to the new
+   target directly, which is the case sheet3 carves out and what `pot-312`'s "don't waste
+   electricity" rationale wants. Only once the water has cooled below 100°C does a mode change cost
+   another boil. The check matters only while ポット状態 is 保温行為中; in アイドル中/沸騰行為中 the new
+   保温温度 is simply read on the next entry to 保温行為.
 
    Provenance: raised with the instructor while asking about
    [docs/analysis-analog/memo.md](docs/analysis-analog/memo.md) item C and about how each mode's
