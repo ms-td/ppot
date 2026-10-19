@@ -92,7 +92,7 @@ load-bearing for the design — the full-water sensor defaults **on** and each l
   after the dechlorination hold; lid-off or all-level-sensors-off drops any action to idle. What
   leaves 保温行為 for 沸騰行為 is a **boil request**, raised either by the boil button or — after a
   keep-warm mode change — once the water is found not to be at 100°C (which object checks depends
-  on the model; in `分析-クラス指定` it is ポット, asking ポット状態 for the current water temperature). The mode
+  on the model; in `分析-クラス指定` it is ポット, asking 行為切替 for the current water temperature). The mode
   change alone is internal and moves nothing (see Known internal conflicts #2).
 - Boiling uses target-temperature ON/OFF control; keep-warm uses PID. The PID output is expressed
   incrementally: `ΔM = Kp(T1−T0) + Ki(Tg−T0) + Kd(2T1−T0−T2)`, `M0 = M1 + ΔM` clamped to 0–100%.
@@ -140,7 +140,7 @@ rather than assuming sheet4 always wins.
    naturally. A mode change in that window must **not** re-boil: the water is cooled to the new
    target directly, which is the case sheet3 carves out and what `pot-312`'s "don't waste
    electricity" rationale wants. Only once the water has cooled below 100°C does a mode change cost
-   another boil. The check matters only while ポット状態 is 保温行為中; in アイドル中/沸騰行為中 the new
+   another boil. The check matters only while the top-level state is 保温行為中; in アイドル中/沸騰行為中 the new
    保温温度 is simply read on the next entry to 保温行為.
 
    Provenance: raised with the instructor while asking about
@@ -194,7 +194,8 @@ Since 2026-10-08 the file holds two parallel analysis models with the same inner
 - `分析` — our own design (state subclasses with overridden `イベント通知`, `温度制御器` + control
   Strategy, …). Kept as the record of what was submitted up to 2026-10-07.
 - `分析-クラス指定` — rebuilt on the **class structure the instructor handed back** (class diagram
-  `電子ポット`: ポット状態 holds the top-level state as an enum and owns 沸騰行為/保温行為, no
+  `電子ポット`: 行為切替 — named ポット状態 until 2026-10-19 — holds the top-level state as an enum
+  and owns 沸騰行為/保温行為; ポット is the entry point with business-named operations; no
   温度制御器). Its state machines and communication diagrams started as copies of `分析`'s and are
   being reworked; this is where new work goes.
 
