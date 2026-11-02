@@ -1,0 +1,91 @@
+# C言語
+
+## 名前の構造
+- "[ネームスペース]_[名前]"
+- ネームスペースはオプション
+- 区切りは "_" アンダーバー
+
+## 関数名
+- 動詞で始まる。
+
+## グローバル変数
+- "g_" で始まる
+- "ig_" 割り込みと非割り込み処理で共有する変数
+
+## 関数内static変数
+- "ls_" で始まる
+
+## ファイル内static変数
+- "s_" で始まる
+
+## マクロ
+- すべて大文字
+
+## enumメンバー
+- すべて大文字
+
+## 構造体型をtypedefする場合
+- すべて大文字
+- 構造体型名は上記をすべて小文字にする
+
+## 関数名の付け方の方針
+
+| 関数名 | 意味 | 例 |
+|+++|+++|+++|
+| is～ | 二値状態の判定 | isModified |
+| can | 実行の可能性の判定 | canModify |
+| get～ | 値の参照 | getProperty |
+| set～ | 値の設定 | setProperty |
+| add～ | 要素の追加 | addMember |
+| remove～ | 要素の削除 | removeMember |
+| do～ | 実行 | doAction |
+| update～ | 実行 | updateDisp |
+| draw～ | 描画 | draw7SEG |
+
+## 変数名にハンガリアンプリフィックスを付ける
+
+> char szBuf[16];
+> const char* pszComment;
+> double adDataPack[10];
+> TEST_RECORD_DATA trdManual;
+> double** ppMyData;
+
+- int : n or i
+- unsigned int : u
+- enum : e
+- bool : b
+- char : c
+- unsigned char : u or by
+- short : n or i
+- unsigned short : u or w
+- short : n or i
+- unsigned short : u or w
+- long : l
+- unsigned long : u, ul or dw
+- float : f
+- double : d
+- char* : p, psz
+- char[] : sz
+- function pointer : pfn
+- pointer : p
+- array of : a (文字列char[]は除外)
+- array of pointer : ap
+- pointer to pointer : pp
+- struct : 構造体名略記 (TEST_RECORD_DATAだったら、trd など)
+
+# C++言語
+
+- 下線が前後に付いた名前は使用しない。
+- #define される定数名やマクロはすべて大文字にする。
+- enum で定義する定数は、先頭の文字を大文字にする。
+- 複数の単語で構成される変数名は、単語毎に先頭を大文字とする（単語の区切りでスペースや＿を使用しない）。
+- グローバル変数は先頭に "g_" を付与する。
+- 各クラスのメンバ変数は先頭に "m_" を付与する。
+- ローカル変数は何もつけない。
+  + 例: indexValueTmp
+
+# 追記
+
+どうやら直接的に言及している記述が無いようなので追記する.
+
+- そのまま利用するつもりの(typedefしない)構造体やクラス名はパスカルケースとすることが多い.

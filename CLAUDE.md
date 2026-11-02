@@ -254,6 +254,25 @@ Where things are stored, and the gotchas that make hand-written SQL fail:
 - When setting element visibility, `t_object.Scope` renders as Public when NULL — update every row,
   not just the ones that already say `'Public'`.
 
+### Coding-name aliases: `scripts/ea_aliases.py`
+
+The design model's class diagram gets 別名 (coding names per `命名規則.txt`, C++ rules first, C
+rules where they don't conflict). `docs/design/別名-クラス指定.md` is the editable form;
+`python scripts/ea_aliases.py export` / `import [--dry-run]` move it both ways (import backs up,
+refuses while EA runs, and skips blank 別名 cells). Storage: class/enum → `t_object.Alias`;
+attribute and enum literal → `t_attribute.Style`; operation → `t_operation.Style`; association
+role → `alias=…;` appended to `t_connector.SourceStyle`/`DestStyle` (confirmed against a role
+alias set in EA's GUI). The table's 型 column also round-trips attribute types and operation
+return types (`Type`/`Classifier`: a package enum/class is written `enum 名前`/`クラス 名前` and
+links by Object_ID; a built-in like `int` or `void` gets `Classifier='0'`), and its 引数 column
+an operation's parameters as `名前: 型, 名前: 型` (all `in`; rewriting rebuilds the
+`t_operationparams` rows but keeps a same-named parameter's GUID and Notes). Conventions agreed so far:
+members `m_` + Hungarian prefix (`i` for int, not `n`; integers are `int`/`unsigned int` for
+now; the spec's fixed values such as `目標温度 = 100°C` are ordinary members, e.g.
+`m_iTargetTemp`), role aliases
+`m_` + camelCase role name without a prefix (the user's `m_keepWarm`), enum members prefixed with the
+enum's name minus `State`/`Kind` (e.g. `LidClosed`).
+
 ## Working notes
 
 - All spec text is Japanese; keep requirement IDs verbatim so they stay greppable against
