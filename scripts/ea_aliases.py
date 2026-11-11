@@ -6,9 +6,9 @@
     python scripts/ea_aliases.py import --dry-run    # 差分だけ表示
     python scripts/ea_aliases.py import              # テキスト -> EA (自動バックアップあり)
 
-対象は <モデル>/クラス パッケージ直下のクラスと enum。別名の格納先:
+対象は <モデル>/クラス パッケージ直下のクラス、インターフェイスと enum。別名の格納先:
 
-- クラス / enum              t_object.Alias
+- クラス / インターフェイス / enum   t_object.Alias
 - 属性 / enum リテラル        t_attribute.Style
 - 操作                       t_operation.Style
 - 関連端のロール              t_connector.SourceStyle / DestStyle の `alias=…;`
@@ -40,6 +40,7 @@ MODELS = {
 }
 CLASS_PKG = 'クラス'
 KIND_ORDER = ('要素', '属性', 'リテラル', '操作', 'ロール')
+HEAD_KIND = {'Class': 'クラス', 'Interface': 'interface', 'Enumeration': 'enum'}
 
 
 class Row:
@@ -52,11 +53,11 @@ HEADER = """<!-- このファイルと EA (話題沸騰ポット.qeax) は scrip
      export: EA -> このファイル / import: このファイル -> EA
 
      書式の決まり:
-     - `## クラス 名前` / `## enum 名前` の名前は EA の Name と完全一致させる
+     - `## クラス 名前` / `## interface 名前` / `## enum 名前` の名前は EA の Name と完全一致させる
        (クラスと enum に同名のもの (保温モード) があるので種類も見出しに含める)
      - 表の「種別」「名前」がキー。ロールの名前は `ロール名 : ロール側クラス`
      - 「別名」「型」が空のセルは未記入とみなし、import では何もしない (EA 側の削除は手作業で)
-     - 「型」は属性の型と操作の返り値の型。パッケージ内の型は `enum 名前` / `クラス 名前`、
+     - 「型」は属性の型と操作の返り値の型。パッケージ内の型は `enum 名前` / `クラス 名前` / `interface 名前`、
        それ以外は int, void などそのまま
      - 「引数」は操作だけ。`名前: 型, 名前: 型` (型の書き方は「型」と同じ)。引数なしは空のまま
      - 「備考」は EA には書き込まない (メモ用)
@@ -109,15 +110,14 @@ def class_pkg(con, model):
 def collect(con, pkg):
     """{見出し: {'type':..., 'id':..., 'rows': {(種別, 名前): Row}}} を返す。
 
-    見出しは `クラス 名前` / `enum 名前`。Row の setter(con, alias) がその行の別名を、
+    見出しは `クラス 名前` / `interface 名前` / `enum 名前`。Row の setter(con, alias) がその行の別名を、
     type_setter(con, 型) が属性の型 / 操作の返り値の型を、params_setter(con, 引数) が操作の引数を
     書き込む (該当しない行は None)。"""
     objs = con.execute("select Object_ID,Name,Object_Type,Alias from t_object where Package_ID=? "
-                       "and Object_Type in ('Class','Enumeration') order by Object_Type,Name",
+                       "and Object_Type in ('Class','Interface','Enumeration') order by Object_Type,Name",
                        (pkg,)).fetchall()
     names = {o['Object_ID']: o['Name'] for o in objs}
-    heads = {o['Object_ID']: '%s %s' % ('enum' if o['Object_Type'] == 'Enumeration' else 'クラス', o['Name'])
-             for o in objs}
+    heads = {o['Object_ID']: '%s %s' % (HEAD_KIND[o['Object_Type']], o['Name']) for o in objs}
     if len(set(heads.values())) != len(heads):
         dup = sorted({n for n in heads.values() if list(heads.values()).count(n) > 1})
         sys.exit('同名の要素がある (見出しをキーにできない): %s' % ', '.join(dup))
@@ -238,7 +238,7 @@ def do_export(con, pkg, model, path):
     old = parse_md(path)
     data = collect(con, pkg)
     lines = [HEADER % (model, CLASS_PKG)]
-    for name in sorted(data, key=lambda n: (data[n]['type'] != 'Class', n)):
+    for name in sorted(data, key=lambda n: (list(HEAD_KIND).index(data[n]['type']), n)):
         d = data[name]
         lines.append('## %s\n' % name)
         lines.append('| 種別 | 名前 | 別名 | 型 | 引数 | 備考 |')

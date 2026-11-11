@@ -270,8 +270,40 @@ an operation's parameters as `名前: 型, 名前: 型` (all `in`; rewriting reb
 members `m_` + Hungarian prefix (`i` for int, not `n`; integers are `int`/`unsigned int` for
 now; the spec's fixed values such as `目標温度 = 100°C` are ordinary members, e.g.
 `m_iTargetTemp`), role aliases
-`m_` + camelCase role name without a prefix (the user's `m_keepWarm`), enum members prefixed with the
-enum's name minus `State`/`Kind` (e.g. `LidClosed`).
+`m_` + camelCase role name without a prefix (the user's `m_keepWarm`). Every navigable association
+end carries a role; where no role was designed, the role name is the held class's name and the
+alias is `m_` + its alias in camelCase (`m_displayPanel`) — the diagram note
+"ロール名の無い関連線では…相手の名称そのもの" is the source of that rule. Enum members are
+prefixed with the enum's name minus `State`/`Kind` (e.g. `LidClosed`) **only while the enum lives
+at package scope**; an enum owned by one class (every state-machine state enum) is nested in it
+(`t_object.ParentID` = the class) and its members drop the prefix (`Lid::Closed`) — instructor's
+comment, 2026-11.
+
+Associations are navigable one way only. A call back the other way goes through an interface
+(Observer / listener style) that the callee realizes and the caller holds: both its name and
+alias are `I<caller's alias, or part of it>Listener` (the `I` + PascalCase form is the instructor's
+rule), its operations are copies of the callee's, and the caller's role is `リスナ` / `m_listener`
+when it holds a single interface. ポット is reached only through such interfaces
+(`IOperationPanelListener`, `ILevelMeterListener`, `ILidListener`, `ITempErrorCheckerListener`) — a
+proxy realizing them is planned to be the one thing that holds ポット. `ea_aliases.py` covers
+interfaces too (`## interface 名前`).
+
+The one real Observer (one change wanted by several) is 行為切替's top-level state:
+`IActionSwitcherListener.状態変化(状態)` is realized by 給湯口 and 表示部 — deliberately not by ランプ /
+温度表示, so leaf parts don't judge the situation — and 行為切替 holds it `1..*` as `m_listeners`,
+filled by `リスナ登録` (`addListener`; no remove, observers are fixed from power-on). The published
+enum 状態 is nested in the interface, not in 行為切替, so observers need not know 行為切替; 表示部's
+`ランプ点灯変更` / `温度表示なし` were dropped because 表示部 now derives lamps and temperature
+on/off from the state itself. Fan-out of stop events (水量異常, 温度エラー, 蓋開) stays in ポット
+as mediator, not Observer: it must go through ポット, and lid-close needs a fixed order.
+
+表示部 likewise is reached only through per-caller interfaces it realizes (`IPotListener`,
+`ITempControlActionListener`, `ISpoutListener`, `ILevelMeterDisplayListener`,
+`IKeepWarmModeListener`); nothing holds 表示部 directly. Their operations stay command-style
+(what to show or sound, e.g. 3回鳴動) so the spec's "when" stays with the caller and 表示部 only
+renders. Where a caller already had a listener — 水位計 (`ILevelMeterListener` for ポット) and
+温度制御行為 (whose subclass 沸騰行為 holds `IBoilActionListener` as `m_listener`) — the display one
+is named `…DisplayListener` / role `表示リスナ` / `m_displayListener` to avoid the clash.
 
 ## Working notes
 
