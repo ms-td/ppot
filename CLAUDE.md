@@ -90,10 +90,9 @@ load-bearing for the design — the full-water sensor defaults **on** and each l
 - Three temperature-control *actions* form the core state machine: 沸騰行為 (boil), 保温行為
   (keep-warm), and アイドル (idle, operation amount forced to 0%). Boil → keep-warm happens only
   after the dechlorination hold; lid-off or all-level-sensors-off drops any action to idle. What
-  leaves 保温行為 for 沸騰行為 is a **boil request**, raised either by the boil button or — after a
-  keep-warm mode change — once the water is found not to be at 100°C (which object checks depends
-  on the model; in `分析-クラス指定` it is ポット, asking 行為切替 for the current water temperature). The mode
-  change alone is internal and moves nothing (see Known internal conflicts #2).
+  leaves 保温行為 for 沸騰行為 is a **boil request**, raised only by the boil button. A keep-warm
+  mode change during 保温行為 stays in 保温行為 and re-targets it in place (instructor's policy from
+  2026-11 — see Known internal conflicts #2; the analysis models still show the older re-boil path).
 - Boiling uses target-temperature ON/OFF control; keep-warm uses PID. The PID output is expressed
   incrementally: `ΔM = Kp(T1−T0) + Ki(Tg−T0) + Kd(2T1−T0−T2)`, `M0 = M1 + ΔM` clamped to 0–100%.
   M is a duty percentage of the control cycle, not a continuous power level.
@@ -108,68 +107,43 @@ load-bearing for the design — the full-water sensor defaults **on** and each l
 
 ### Known internal conflicts
 
-Sheet3's overview rows disagree with sheet4's numbered requirements in two places. They are
-resolved differently — **#1 follows sheet4, #2 follows sheet3** — so check the individual entry
-rather than assuming sheet4 always wins.
+Sheet3's overview rows disagree with sheet4's numbered requirements in two places. Both are now
+resolved in sheet4's favour, but #2 was resolved the other way until 2026-11, and the analysis
+models still show that older path, so read the history before trusting a diagram.
 
 1. **Error thresholds** (sheet3 `安全性要求`) — summary says over-temp above 100°C and a 5°C
    "temperature not rising" margin, and lists only two errors; `pot-500-11/-21/-31` say **110°C**,
    an **8°C** margin, and three errors including temp-not-falling (keep-warm above 98°C for over
    3 min).
 
-2. **Re-boil on keep-warm mode change** (sheet3 `＜その他の動作仕様＞`) — **two separate questions
-   that are easy to conflate. Keep them apart; the answers differ.**
+2. **Keep-warm mode change during 保温行為** (sheet3 `＜その他の動作仕様＞`:
+   "保温モードに設定した際に100°Cでなかった場合、一度沸騰させたあと、自然に冷ましながら設定温度に保つ").
+   **Current policy (instructor, 2026-11): ignore that sheet3 sentence.** A mode change while
+   保温行為中 stays in 保温行為 and the new 保温温度 is pushed to everything that holds a target
+   (保温行為's PID target, 温度エラー監視's target for `pot-500-31`) — in the design model through
+   the 保温モード Observer (see the Observer paragraph under Modeling artifacts). No boil request follows a mode
+   change; in アイドル中/沸騰行為中 the new 保温温度 is simply read on the next entry to 保温行為. This also
+   removes the old residual tension with `pot-320-31` (its stop list, which never mentioned a mode
+   change, is now exhaustive again). The instructor believed this had been said earlier; from our
+   side it had only come up as "is re-boiling really good for usability", never as "ignore it".
+   It explains the instructor's original class structure (保温モード passing the target to 保温行為)
+   and the earlier hint that an Observer would be needed.
 
-   **(a) Does setting the mode itself move the state machine? No.** `pot-240-21` is internal to
-   保温モード: it beeps, advances モード, sets the matching 保温温度, and updates the mode display.
-   保温行為 is not left, and `pot-320-31`'s stop-condition list (error detected / lid sensor off /
-   all level sensors off / boil button pressed) correctly does not mention a mode change. Sheet4's
-   reading holds for this half.
+   History, kept because `分析` / `分析-クラス指定` and their scenarios were built on it: until
+   2026-11 we read sheet3 as authoritative — after a mode change, if the water was not at 100°C a
+   boil request was raised (same path as the boil button), and the new 保温温度 reached 温度制御 only
+   on re-entering 保温行為 after カルキ抜き. `docs/design/シナリオ変更点.md` lists what the policy
+   change rewrites in those scenarios.
 
-   **(b) When does the newly set temperature actually reach 温度制御 — i.e. when does the heat
-   change? Only by going through 沸騰行為.** This is what sheet3 describes
-   ("保温モードに設定した際に100°Cでなかった場合、一度沸騰させたあと、自然に冷ましながら設定温度に保つ")
-   and it is the question the instructor was actually asking — the path and timing by which a
-   mode's target temperature is applied to real heating. After the mode is set, the water
-   temperature is checked and, if it is not 100°C, a **boil request** is raised. The state
-   change is caused by that request — the same event path as the boil button — not by the mode
-   change as such. The new 保温温度 reaches 温度制御 only when 保温行為 is entered again after
-   カルキ抜き completes. Keep the "not at 100°C" check — it is not vacuous, even though every mode's
-   target is below 100°C. 保温行為 is only ever entered straight out of カルキ抜き (`pot-311-11`
-   holds the heater on for 3 min), so the water *is* at 100°C right then and is left to cool
-   naturally. A mode change in that window must **not** re-boil: the water is cooled to the new
-   target directly, which is the case sheet3 carves out and what `pot-312`'s "don't waste
-   electricity" rationale wants. Only once the water has cooled below 100°C does a mode change cost
-   another boil. The check matters only while the top-level state is 保温行為中; in アイドル中/沸騰行為中 the new
-   保温温度 is simply read on the next entry to 保温行為.
-
-   Provenance: raised with the instructor while asking about
-   [docs/analysis-analog/memo.md](docs/analysis-analog/memo.md) item C and about how each mode's
-   target temperature gets re-applied to 温度制御. The reading was put forward from our side and
-   was not contradicted — and this instructor does normally push back with a specific `pot-NNN`
-   when a reading is wrong — so it is taken as accepted. It is an argument from silence, so if the
-   instructor later objects, this entry is the thing to revisit. Open question still live in
-   discussion: whether re-boiling after every mode change is actually *good* for usability
-   (dropping from 98°C to the milk mode's 60°C by first boiling to 100°C is hard to defend as a
-   user experience, and it is also the more energy-hungry path — `pot-312` exists precisely to
-   avoid wasted electricity).
-
-   Residual tension with sheet4, worth stating if asked rather than hiding: the boil request that
-   follows a mode change is not in `pot-320-31`'s list either — only 沸騰ボタン押下 is — so that
-   list is still being read as non-exhaustive. What (a) buys is that the exception is an ordinary
-   boil request, not a special "mode change leaves 保温行為" rule.
-
-   Consequence for `pot-500-21` ("保温の各モードに**なって**3分以上水温が98°Cを超えていた場合"):
-   the 3-minute window resets on entry to 保温行為. Since the mode-change path leaves and re-enters
-   保温行為 through 沸騰行為, it resets there too. Keep the timer reset in 保温行為's entry action —
-   that single placement covers every path.
-
-   That makes the window restartable by repeated user action, via two paths: `pot-230-11`
-   (boil button) and a mode change. This is accepted as a known limitation because both return
-   paths always run カルキ抜き — `pot-311-11` holds the heater unconditionally on for 3 minutes —
-   while `pot-500-11` (110°C) is armed throughout, so an anomaly that keeps the water above 98°C
-   is more likely to trip `pot-500-11` there than to escape detection. Record this reasoning
-   rather than "users would not do that": `pot-500` is a safety requirement.
+   Open consequence for `pot-500-21` ("保温の各モードに**なって**3分以上水温が98°Cを超えていた場合"):
+   the 3-minute window resets on entry to 保温行為. The old argument that resetting it via a mode
+   change was safe — that path always ran カルキ抜き with `pot-500-11` (110°C) armed — **no longer
+   holds**, because a mode change no longer goes through カルキ抜き. Resetting on mode change would
+   let repeated button presses keep the error from ever firing. Since the 98°C threshold does not
+   depend on the mode, our position (the user's too) is to reset only on entry to 保温行為, not on
+   mode change; this is still to be confirmed with the instructor. Either answer fits the design —
+   if it must reset, 温度エラー監視's `目標温度変更` calls 温度下がらず判定's `リセット`. `pot-500` is a
+   safety requirement — record the reasoning, not "users would not do that".
 
 ## Modeling artifacts (Enterprise Architect)
 
@@ -288,7 +262,7 @@ when it holds a single interface. ポット is reached only through such interfa
 proxy realizing them is planned to be the one thing that holds ポット. `ea_aliases.py` covers
 interfaces too (`## interface 名前`).
 
-The one real Observer (one change wanted by several) is 行為切替's top-level state:
+There are two real Observers (one change wanted by several). The first is 行為切替's top-level state:
 `IActionSwitcherListener.状態変化(状態)` is realized by 給湯口 and 表示部 — deliberately not by ランプ /
 温度表示, so leaf parts don't judge the situation — and 行為切替 holds it `1..*` as `m_listeners`,
 filled by `リスナ登録` (`addListener`; no remove, observers are fixed from power-on). The published
@@ -297,11 +271,25 @@ enum 状態 is nested in the interface, not in 行為切替, so observers need n
 on/off from the state itself. Fan-out of stop events (水量異常, 温度エラー, 蓋開) stays in ポット
 as mediator, not Observer: it must go through ポット, and lid-close needs a fixed order.
 
+The second is the keep-warm mode (added for the 2026-11 policy, Known internal conflicts #2):
+`IKeepWarmModeListener.モード変化(モード)` (`notifyModeChanged`) is realized by 表示部 and 保温行為,
+and 保温モード holds it `1..*` as `m_listeners` with its own `リスナ登録`. Only the enum is passed:
+enum 保温モード's literals carry the temperature as their value (98/90/60), so whoever receives the
+enum knows the temperature too. 温度エラー監視 is deliberately **not** an observer: the
+notification also arrives during 沸騰行為中 / アイドル中, and as an observer it would have to judge
+whether it is monitoring keep-warm so as not to overwrite the 100°C boiling target. Instead 保温行為,
+which already knows whether it is keeping warm, calls `温度エラー監視.目標温度変更(目標温度)`
+(`changeTargetTemp`) over the association inherited from 温度制御行為. That does not re-run
+`監視開始`, so no checker is reset, and the target reaches the checkers through
+`温度エラー確認(目標温度, 経過時間)`. A bool on `監視開始` to pin the target was considered and
+rejected as more confusing. 保温行為 still reads `保温温度読み出し` from 保温モード on entry.
+
 表示部 likewise is reached only through per-caller interfaces it realizes (`IPotListener`,
-`ITempControlActionListener`, `ISpoutListener`, `ILevelMeterDisplayListener`,
-`IKeepWarmModeListener`); nothing holds 表示部 directly. Their operations stay command-style
-(what to show or sound, e.g. 3回鳴動) so the spec's "when" stays with the caller and 表示部 only
-renders. Where a caller already had a listener — 水位計 (`ILevelMeterListener` for ポット) and
+`ITempControlActionListener`, `ISpoutListener`, `ILevelMeterDisplayListener`, and the
+`IKeepWarmModeListener` Observer); nothing holds 表示部 directly. Their operations stay command-style
+(what to show or sound, e.g. 単発鳴動) so the spec's "when" stays with the caller and 表示部 only
+renders — except what follows 行為切替's state, which 表示部 derives itself from 状態変化 (lamps,
+temperature on/off, and the 3-beep at the end of boiling, sheet3 "沸騰状態終了時、ブザーを3回鳴動"). Where a caller already had a listener — 水位計 (`ILevelMeterListener` for ポット) and
 温度制御行為 (whose subclass 沸騰行為 holds `IBoilActionListener` as `m_listener`) — the display one
 is named `…DisplayListener` / role `表示リスナ` / `m_displayListener` to avoid the clash.
 
