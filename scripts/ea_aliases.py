@@ -113,9 +113,14 @@ def collect(con, pkg):
     見出しは `クラス 名前` / `interface 名前` / `enum 名前`。Row の setter(con, alias) がその行の別名を、
     type_setter(con, 型) が属性の型 / 操作の返り値の型を、params_setter(con, 引数) が操作の引数を
     書き込む (該当しない行は None)。"""
-    objs = con.execute("select Object_ID,Name,Object_Type,Alias from t_object where Package_ID=? "
-                       "and Object_Type in ('Class','Interface','Enumeration') order by Object_Type,Name",
-                       (pkg,)).fetchall()
+    # クラス パッケージの下はさらにパッケージに分かれている (2026-11) ので、配下を全部たどる
+    pkgs, i = [pkg], 0
+    while i < len(pkgs):
+        pkgs += [r[0] for r in con.execute('select Package_ID from t_package where Parent_ID=?', (pkgs[i],))]
+        i += 1
+    objs = con.execute("select Object_ID,Name,Object_Type,Alias from t_object where Package_ID in (%s) "
+                       "and Object_Type in ('Class','Interface','Enumeration') order by Object_Type,Name"
+                       % ','.join('?' * len(pkgs)), pkgs).fetchall()
     names = {o['Object_ID']: o['Name'] for o in objs}
     heads = {o['Object_ID']: '%s %s' % (HEAD_KIND[o['Object_Type']], o['Name']) for o in objs}
     if len(set(heads.values())) != len(heads):

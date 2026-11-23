@@ -293,6 +293,32 @@ temperature on/off, and the 3-beep at the end of boiling, sheet3 "沸騰状態�
 温度制御行為 (whose subclass 沸騰行為 holds `IBoilActionListener` as `m_listener`) — the display one
 is named `…DisplayListener` / role `表示リスナ` / `m_displayListener` to avoid the clash.
 
+### Packages and tasks (設計-クラス指定, 2026-11)
+
+`設計-クラス指定/クラス` is split into sub-packages (温度エラー, 操作パネル(操作), 操作パネル(表示), 給湯口,
+蓋, 水位, 温度制御 ⊃ 制御行為, ポット, サーミスタ, 保温モード), each with a Logical diagram of the
+same name; `電子ポット` stays as the whole picture. The instructor's rule is one-way references
+between packages, no mutual or circular ones. Runtime call-backs (feedback to ポット, Observer
+notifications) do not break that as long as **every listener interface lives in the package of
+the class that holds and calls through it** — the `I<caller>Listener` name already says which
+package that is. The realizer then depends on the caller's package, the same direction as any
+association it has. An interface left in the realizer's package recreates the cycle; that is
+what happened to five of them until 2026-11-19. A cycle that survives correct interface placement
+means a class is in the wrong package: 保温モード (class, `IKeepWarmModeListener`, enum) was moved
+out of 温度制御 into its own package for that reason. The current graph has 19 package
+dependencies and no cycle. Diagram `[メモ:パッケージ参照方向]` (the user's) draws them as plain
+dependencies, meaning the reference direction, not the call direction. A child package depending
+on its parent (制御行為 → 温度制御) also counts as a cycle.
+
+`ea_aliases.py` walks every sub-package under `クラス`, so the alias table stays flat across the
+split.
+
+Task structure (instructor, 2026-11): 操作部 and 表示部 are the tasks, and they update their ボタン /
+インジケータセル in one batch. ボタン and インジケータセル are not tasks of their own, because of I/O access
+frequency and the total task count. A planned ポットプロキシ, realizing the same interfaces as ポット,
+will be a task too. Callers go through its methods, which become flag or message notifications,
+and it then calls ポット, so the callers' contexts are decoupled from ポット's.
+
 ## Working notes
 
 - All spec text is Japanese; keep requirement IDs verbatim so they stay greppable against
