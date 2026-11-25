@@ -259,7 +259,8 @@ alias are `I<caller's alias, or part of it>Listener` (the `I` + PascalCase form 
 rule), its operations are copies of the callee's, and the caller's role is `リスナ` / `m_listener`
 when it holds a single interface. ポット is reached only through such interfaces
 (`IOperationPanelListener`, `ILevelMeterListener`, `ILidListener`, `ITempErrorCheckerListener`) — a
-proxy realizing them is planned to be the one thing that holds ポット. `ea_aliases.py` covers
+proxy realizing them is planned to be the one thing that holds ポット. Which package each
+interface lives in follows the master/slave rule under "Packages and tasks" below. `ea_aliases.py` covers
 interfaces too (`## interface 名前`).
 
 There are two real Observers (one change wanted by several). The first is 行為切替's top-level state:
@@ -295,20 +296,54 @@ is named `…DisplayListener` / role `表示リスナ` / `m_displayListener` to 
 
 ### Packages and tasks (設計-クラス指定, 2026-11)
 
-`設計-クラス指定/クラス` is split into sub-packages (温度エラー, 操作パネル(操作), 操作パネル(表示), 給湯口,
-蓋, 水位, 温度制御 ⊃ 制御行為, ポット, サーミスタ, 保温モード), each with a Logical diagram of the
-same name; `電子ポット` stays as the whole picture. The instructor's rule is one-way references
-between packages, no mutual or circular ones. Runtime call-backs (feedback to ポット, Observer
-notifications) do not break that as long as **every listener interface lives in the package of
-the class that holds and calls through it** — the `I<caller>Listener` name already says which
-package that is. The realizer then depends on the caller's package, the same direction as any
-association it has. An interface left in the realizer's package recreates the cycle; that is
-what happened to five of them until 2026-11-19. A cycle that survives correct interface placement
-means a class is in the wrong package: 保温モード (class, `IKeepWarmModeListener`, enum) was moved
-out of 温度制御 into its own package for that reason. The current graph has 19 package
-dependencies and no cycle. Diagram `[メモ:パッケージ参照方向]` (the user's) draws them as plain
-dependencies, meaning the reference direction, not the call direction. A child package depending
-on its parent (制御行為 → 温度制御) also counts as a cycle.
+`設計-クラス指定/クラス` is split into sub-packages, all directly under `クラス`: 温度エラー,
+操作パネル(操作), 操作パネル(表示), 給湯口, 蓋, 水位, 温度制御 (行為切替 only), 制御行為, ポット,
+保温モード (サーミスタ had one until 2026-11-25). Each has a Logical diagram of the same name, and `電子ポット` stays as the
+whole picture. The instructor's rule is one-way references between packages, no mutual or circular
+ones. Diagram `パッケージ参照方向` (the user's; named `[メモ:…]` until 2026-11-24) draws them as
+plain dependencies, meaning the reference direction, not the call direction.
+
+**Master/slave rule (instructor, 2026-11-24).** For each pair, decide which side is the 主 (master)
+and which the 従 (slave). Every interface between them lives in the **master's package**,
+whichever way the call goes:
+
+- calls from the master to the slave: an interface named `I` + the slave's alias, e.g. `ISpout`,
+  realized by 給湯口 and held by ポット. Its operations are the slave's own public operations,
+  minus those coming from other interfaces and minus `リスナ登録`, or only the ones the master
+  actually calls (`IKeepWarmMode` has just `保温設定変更`, because `保温温度読み出し` is 保温行為's).
+  The existing association is re-pointed to the interface and keeps its role.
+- notifications from the slave to the master: the `I<caller>Listener` interfaces, realized by the
+  master.
+
+So the slave package depends on the master package and nothing points back. The instructor's
+reason: the master can then be compiled and unit-tested with mocks before any slave exists. The
+dependencies do not get fewer; they now point at abstractions in the master's package instead of
+at concrete classes. The hierarchy so far:
+
+- ポット is the root and references no other package. The interfaces it holds are `ISpout`, `ILid`,
+  `ILevelMeter`, `IKeepWarmMode`, `IActionSwitcher` and `IHeaterPowerSupply`, plus the listener
+  interfaces it realizes. ヒータ用電源 lives inside the ポット package behind `IHeaterPowerSupply`.
+  This is a compromise the user chose: it has no other user and too little to deserve a package
+  of its own, and leaving it in 温度制御 would block isolating 行為切替.
+- 行為切替 (温度制御) is the master of 制御行為. It holds `ITempControlAction` (開始 / 停止, realized
+  by the abstract 温度制御行為) and owns `IBoilActionListener`.
+- 制御行為 is the master of 温度エラー. It holds `ITempErrorMonitor`, which nests enum 温度エラー種別
+  so that 監視開始's parameter type does not point back into 温度エラー. サーミスタ lives in 制御行為
+  too (2026-11-25), behind `IThermistor` (`検出値読み出し`), which both 温度制御行為 and
+  温度エラー判定 hold. The interface is there for tests: boiling, keep-warm (PID) and each error
+  check need differently shaped temperature-over-time inputs, unlike the two-valued lid / level /
+  button sensors. Once the interface sat in 制御行為, a separate サーミスタ package would only have
+  lost its incoming lines, so the user folded the class in as well, as the instructor had suggested.
+- Observer subjects stay masters of their observers. Observers depend on the subject's package,
+  which is why 行為切替 has a small package of its own and 保温モード has its own.
+- 表示部 is everyone's slave and nothing references 操作パネル(表示).
+
+Before 2026-11-24 the rule was "interface in the caller's package". It was cycle-free too, but it
+put ポット on top, depending on every slave; the master/slave rule flips that end.
+When checking, count package dependencies from associations (along their navigable direction),
+realizations, generalizations, dependencies and attribute / parameter types. The current graph has
+17 edges and no cycle. If a cycle survives correct interface placement, it means a class is in the wrong
+package.
 
 `ea_aliases.py` walks every sub-package under `クラス`, so the alias table stays flat across the
 split.
